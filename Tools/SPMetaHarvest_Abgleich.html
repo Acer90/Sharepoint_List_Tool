@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https://*; child-src 'none';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- jQuery, sp.js, SP.Core sind laut Loader bereits vorgeladen -->
+  <style>
+    :root { --berry: #b41069; }
+    body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f8f6f8; color: #1f1f1f; }
+    h1 { color: var(--berry); margin-top: 1rem; font-size: 1.5rem; }
+    .card { background: #fff; border: 1px solid #e5e1e8; border-radius: 8px; padding: 1rem 1.25rem; margin-top: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    label { display: block; margin: 0.5rem 0 0.25rem; font-weight: 600; }
+    input[type="text"], textarea {
+      width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cfc7d2; border-radius: 6px; font-size: 0.95rem;
+    }
+    textarea { min-height: 90px; font-family: "Cascadia Code", monospace; }
+    button { background: var(--berry); color: #fff; border: none; border-radius: 6px; padding: 0.6rem 1rem; font-size: 0.95rem; cursor: pointer; margin-top: 0.75rem; transition: opacity 0.15s ease; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status { margin-top: 0.75rem; font-size: 0.95rem; }
+    .status.ok { color: #0b8c54; }
+    .status.err { color: #b41010; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; font-size: 0.9rem; }
+    th, td { border: 1px solid #e5e1e8; padding: 0.4rem 0.5rem; text-align: left; }
+    th { background: rgba(180,16,105,0.08); color: #3a0d2a; }
+    .pill { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; background: rgba(180,16,105,0.12); color: var(--berry); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.2px; }
+    .small { font-size: 0.9rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Abgleich alt &rarr; neu (GUIDs, URLs, Views)</h1>
+
+  <div class="card">
+    <p class="hint">
+      1) Neue Site-URL angeben.<br>
+      2) Export-JSON der alten Site (aus <strong>SPMetaHarvest_Export.html</strong>) hochladen.<br>
+      3) Optional: Change-Overrides angeben (Key=alt, Value=neu).<br>
+      4) Abgleich erstellen &rarr; Download der Vergleichsdatei (JSON).
+    </p>
+
+    <label>Neue Site-URL</label>
+    <input id="newSiteUrl" type="text" placeholder="https://ustgber.ecm.bundeswehr.org/portale/P5619770115" />
+
+    <label>Export (alt) JSON</label>
+    <input id="fileOld" type="file" accept=".json,application/json" />
+
+    <label>Change-Overrides (JSON-Objekt: "alt":"neu")</label>
+    <textarea id="txtOverrides" placeholder='{
+  "https://zsandstbw.ecm.bundeswehr.org/portale/P5603398863/": "https://ustgber.ecm.bundeswehr.org/portale/P5619770115/",
+  "": ""
+}'></textarea>
+
+    <button id="btnCompare">Abgleich erstellen</button>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h3>Vorschau Abgleich</h3>
+    <div id="preview"></div>
+  </div>
+
+  <script>
+    const setStatus = (msg, type = "") => {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status " + type;
+    };
+
+    const getConfigOverrides = () =>
+      (window.SPHarvestConfig && window.SPHarvestConfig.overrides) ? window.SPHarvestConfig.overrides : {};
+
+    const prefillOverrides = () => {
+      if (window.SPHarvestConfig?.prefillOverridesTextarea) {
+        const cfg = getConfigOverrides();
+        const existing = $("#txtOverrides").val().trim();
+        if (!existing) {
+          $("#txtOverrides").val(JSON.stringify(cfg, null, 2));
+        }
+      }
+    };
+
+    const readJsonFile = (file) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => { try { resolve(JSON.parse(reader.result)); } catch (e) { reject(e); } };
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+
+    const downloadJson = (data, filename) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    };
+
+    const buildMapByTitle = (lists) => {
+      const map = new Map();
+      lists.forEach(l => map.set((l.title || "").toLowerCase(), l));
+      return map;
+    };
+
+    const applyOverrides = (text) => {
+      if (!text.trim()) return {};
+      try { return JSON.parse(text); }
+      catch (e) { console.warn("Override JSON ungültig:", e); return {}; }
+    };
+
+    const renderPreview = (rows, meta) => {
+      let header = "";
+      if (meta) {
+        header = `
+          <div class="small">
+            Alt: ${meta.oldSiteUrl || "-"} &nbsp; (${meta.oldSiteShort || "-"})
+            &nbsp; | &nbsp;
+            Neu: ${meta.newSiteUrl || "-"} &nbsp; (${meta.newSiteShort || "-"})
+          </div>
+        `;
+      }
+
+      if (!rows.length) {
+        $("#preview").html(header + "<em>Keine Zuordnungen gefunden.</em>");
+        return;
+      }
+      let html = `
+        ${header}
+        <table>
+          <thead>
+            <tr>
+              <th>Liste alt (GUID)</th>
+              <th>Liste neu (GUID)</th>
+              <th>URL alt</th>
+              <th>URL neu</th>
+              <th>View alt -&gt; neu</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      rows.forEach(r => {
+        html += `
+          <tr>
+            <td>${r.listOld?.title || ""}<br><span class="pill">${r.listOld?.id || ""}</span></td>
+            <td>${r.listNew?.title || ""}<br><span class="pill">${r.listNew?.id || ""}</span></td>
+            <td>${r.urlOld || ""}</td>
+            <td>${r.urlNew || ""}</td>
+            <td>${r.viewMappings.map(v => `${v.oldTitle} → ${v.newTitle} (${v.oldId || ""} → ${v.newId || ""})`).join("<br>")}</td>
+          </tr>
+        `;
+      });
+      html += "</tbody></table>";
+      $("#preview").html(html);
+    };
+
+    // Kurzform der Site-URL: letzte zwei Segmente des Pfads
+    const shortSite = (urlStr) => {
+      try {
+        const u = new URL(urlStr);
+        const parts = u.pathname.split("/").filter(Boolean);
+        if (parts.length >= 2) {
+          return parts.slice(-2).join("/");
+        }
+        return u.pathname.replace(/^\//, "") || urlStr;
+      } catch {
+        return urlStr;
+      }
+    };
+
+    const fetchListsWithViews = async (siteUrl) => {
+      const listsUrl = `${siteUrl}/_api/web/lists?$select=Title,Id,DefaultViewUrl,RootFolder/ServerRelativeUrl&$expand=RootFolder`;
+      const listsResp = await $.ajax({
+        url: listsUrl,
+        method: "GET",
+        headers: { "Accept": "application/json;odata=nometadata" }
+      });
+
+      const lists = listsResp.value || [];
+      const withViews = [];
+
+      for (const list of lists) {
+        const viewsUrl = `${siteUrl}/_api/web/lists(guid'${list.Id}')/views?$select=Title,Id,ServerRelativeUrl,Url`;
+        let views = [];
+        try {
+          const viewsResp = await $.ajax({
+            url: viewsUrl,
+            method: "GET",
+            headers: { "Accept": "application/json;odata=nometadata" }
+          });
+          views = viewsResp.value || [];
+        } catch (e) {
+          console.warn("Konnte Views nicht laden", list.Title, e);
+        }
+
+        withViews.push({
+          title: list.Title,
+          id: list.Id,
+          serverRelativeUrl: list.RootFolder?.ServerRelativeUrl || "",
+          defaultViewUrl: list.DefaultViewUrl || "",
+          views: views.map(v => ({
+            title: v.Title,
+            id: v.Id,
+            serverRelativeUrl: v.ServerRelativeUrl || "",
+            url: v.Url || ""
+          }))
+        });
+      }
+      return withViews;
+    };
+
+    $(function() {
+      prefillOverrides();
+
+      $("#btnCompare").on("click", async function() {
+        const fOld = $("#fileOld")[0].files[0];
+        const newSiteUrl = ($("#newSiteUrl").val() || "").trim();
+
+        if (!fOld) { setStatus("Bitte Export-JSON hochladen.", "err"); return; }
+        if (!newSiteUrl) { setStatus("Bitte neue Site-URL angeben.", "err"); return; }
+
+        $(this).prop("disabled", true);
+        setStatus("Verarbeite …");
+
+        try {
+          const oldData = await readJsonFile(fOld);
+
+          // Overrides zusammenführen: Config < Textarea (Textarea gewinnt)
+          const cfgOverrides = getConfigOverrides();
+          const uiOverrides  = applyOverrides($("#txtOverrides").val());
+          const overrides = { ...cfgOverrides, ...uiOverrides };
+
+          // Neue Site live abfragen
+          const newLists = await fetchListsWithViews(newSiteUrl);
+          const mapOld = buildMapByTitle(oldData.lists || []);
+          const mapNew = buildMapByTitle(newLists || []);
+          const rows = [];
+
+          // Match by List-Title
+          for (const [title, listOld] of mapOld.entries()) {
+            const listNew = mapNew.get(title) || null;
+            const viewMappings = [];
+            if (listOld.views && listNew?.views) {
+              const mapViewNew = new Map(listNew.views.map(v => [(v.title || "").toLowerCase(), v]));
+              listOld.views.forEach(vOld => {
+                const vNew = mapViewNew.get((vOld.title || "").toLowerCase()) || null;
+                viewMappings.push({
+                  oldTitle: vOld.title || "",
+                  newTitle: vNew?.title || "",
+                  oldId: vOld.id || "",
+                  newId: vNew?.id || "",
+                  oldUrl: vOld.url || vOld.serverRelativeUrl || "",
+                  newUrl: vNew?.url || vNew?.serverRelativeUrl || ""
+                });
+              });
+            }
+
+            // URL mapping (with overrides applied)
+            const urlOld = listOld.serverRelativeUrl || listOld.defaultViewUrl || "";
+            let urlNew = listNew?.serverRelativeUrl || listNew?.defaultViewUrl || "";
+            for (const [k, v] of Object.entries(overrides)) {
+              if (k && urlOld.startsWith(k)) {
+                urlNew = urlOld.replace(k, v);
+              }
+            }
+
+            rows.push({ listOld, listNew, urlOld, urlNew, viewMappings });
+          }
+
+          const meta = {
+            oldSiteUrl: oldData.siteUrl || "",
+            newSiteUrl: newSiteUrl,
+            oldSiteShort: oldData.siteUrl ? shortSite(oldData.siteUrl) : "",
+            newSiteShort: newSiteUrl ? shortSite(newSiteUrl) : ""
+          };
+
+          const compare = {
+            generatedAt: new Date().toISOString(),
+            ...meta,
+            overrides,
+            mappings: rows.map(r => ({
+              list: {
+                old: { title: r.listOld?.title || "", id: r.listOld?.id || "", url: r.urlOld || "" },
+                neu: { title: r.listNew?.title || "", id: r.listNew?.id || "", url: r.urlNew || "" }
+              },
+              views: r.viewMappings
+            }))
+          };
+
+          renderPreview(rows, meta);
+          downloadJson(compare, "sp_compare.json");
+          setStatus(`Abgleich erstellt (${rows.length} Listen).`, "ok");
+        } catch (e) {
+          console.error(e);
+          setStatus("Fehler beim Abgleich. Details in der Konsole.", "err");
+        } finally {
+          $(this).prop("disabled", false);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

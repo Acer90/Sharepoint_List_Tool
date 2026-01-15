@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SP Raumplanung — Vollständig (REST RecurrenceData + Full JSOM)</title>
+  <style>
+    /* UI styles (kept compact) */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root{ --berry:#b41069; --bg:#f7f7f9; --card:#fff; --muted:#666; --success:#2d9f4a; }
+    body{ margin:0; font-family:"Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:#222; }
+    .container{ max-width:1200px; margin:18px auto; padding:16px; }
+    header{ display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+    header h1{ margin:0; color:var(--berry); font-size:20px; }
+    .top-actions{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .btn{ background:var(--berry); color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; }
+    .btn.secondary{ background:#eee; color:#222; border:1px solid #ddd; }
+    .btn.success{ background:var(--success); color:#fff; }
+    .btn.danger{ background:#b71c1c; color:#fff; }
+    .layout{ display:flex; gap:12px; align-items:flex-start; }
+    .main{ flex:1; }
+    .card{ background:var(--card); border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+    .sidebar{ width:300px; min-width:220px; }
+    .room-list{ list-style:none; padding:0; margin:0; }
+    .room-list li{ display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:6px; background:#fff; border:1px solid #eee; margin-bottom:6px; }
+    .hr{ height:1px; background:#eee; margin:10px 0; border-radius:2px; }
+    .muted-small{ color:var(--muted); font-size:13px; }
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; padding:12px; z-index:9999; }
+    .modal{ width:920px; max-width:100%; background:#fff; border-radius:10px; padding:16px; max-height:calc(100vh - 48px); overflow:auto; box-shadow:0 6px 30px rgba(0,0,0,0.3); }
+    .form-row{ display:flex; gap:8px; margin-bottom:10px; align-items:flex-start; }
+    .form-row .col{ flex:1 1 0%; min-width:0; }
+    label{ display:block; font-size:13px; margin-bottom:6px; }
+    input, select, textarea{ width:100%; padding:8px; border-radius:6px; border:1px solid #ddd; font-size:14px; box-sizing:border-box; }
+    textarea{ min-height:140px; resize:vertical; font-family:inherit; }
+    .html-editor-toolbar{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+    .html-editor-toolbar button{ padding:6px 8px; border-radius:6px; border:1px solid #ddd; background:#fafafa; cursor:pointer; }
+    .html-editor{ border:1px solid #ddd; padding:12px; border-radius:6px; min-height:120px; background:#fff; overflow:auto; }
+    .cfg-msg{ margin-top:8px; color:#333; font-size:13px; white-space:pre-line; }
+    table.admin-requests{ width:100%; border-collapse:collapse; margin-top:12px; }
+    table.admin-requests th, table.admin-requests td{ border:1px solid #e6e6e6; padding:8px; text-align:left; vertical-align:middle; }
+    table.admin-requests th{ background:#fafafa; font-weight:600; font-size:13px; }
+    @media (max-width:900px){ .layout{ flex-direction:column; } .sidebar{ width:100%; } .modal{ padding:12px; max-height:calc(100vh - 24px); } .form-row{ flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img alt="R" width="36" height="36" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36'><rect rx='6' width='36' height='36' fill='%23b41069'/><text x='50%' y='57%' fill='white' font-size='18' font-family='Segoe UI' text-anchor='middle' alignment-baseline='middle'>R</text></svg>">
+      <h1>SharePoint Raumplanung</h1>
+      <div style="margin-left:8px" class="muted-small">Benutzer: <span id="sp-user">—</span></div>
+      <div class="top-actions">
+        <button id="btn-open-requests" class="btn secondary" style="display:none">Offene Anfragen</button>
+        <button id="btn-config" class="btn secondary" style="display:none">Konfiguration</button>
+        <button id="btn-new" class="btn">Raum beantragen</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="main">
+        <div id="calendar" class="card" style="min-height:320px"></div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between"><strong>Räume</strong><span id="admin-indicator"></span></div>
+          <div class="hr"></div>
+          <ul id="roomList" class="room-list"></ul>
+          <div style="margin-top:10px" class="muted-small">Klicke auf ein Datum im Kalender, um eine Anfrage zu starten.</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="modal-root" style="display:none"></div>
+
+  <script src="https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/js/jquery-3.7.1.min.js"></script>
+  <script src="https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/js/fullcalendar/dist/index.global.min.js"></script>
+  <script src="https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/js/fullcalendar/locales/de.global.min.js"></script>
+
+  <script src="/_layouts/15/sp.runtime.js"></script>
+  <script src="/_layouts/15/sp.js"></script>
+  <script src="/_layouts/15/SP.Core.js"></script>
+
+<script>
+/*
+  Vollständige implementierung — alle Funktionen in einer Datei:
+  - Early helpers (timeStringToMinutes, etc.)
+  - REST helpers (getRequestDigest, getListEntityType, createListItemREST)
+  - JSOM helpers and list/field functions
+  - Recurrence helpers and expansion
+  - createOrUpdateAllListsJSOM (robust), saveConfigItem (robust)
+  - loadRooms, loadBlocks, loadEvents, createSingleItemsAndBlocks (JSOM)
+  - createSeriesInCalendarAndBlocks (REST, sets RecurrenceData)
+  - delete/update/sendEmail (JSOM)
+  - Full UI: initCalendar, openRequestModal, openEventDetailsModal, openConfigModal, openOpenRequestsDialog
+  - Boot sequence (UI-first, then JSOM/REST background)
+*/
+
+(function(global, $){
+  "use strict";
+
+  const CONFIG = {
+    calendarListTitle: "Raumkalender",
+    roomsListTitle: "Raeume",
+    blockListTitle: "RaumBlocklist",
+    configListTitle: "RaumPlanungConfig",
+    adminsListTitle: "RaumPlanungAdmins",
+    mailNotifyAddress: "",
+    mailTemplateNewRequest: "<div>Neue Anfrage von {{requester}}</div>",
+    mailTemplateStatusChange: "<div>Status {{status}}</div>",
+    timeSlotMinutes: 15,
+    defaultView: 'timeGridWeek',
+    locale: 'de',
+    berry: '#b41069',
+    maxSeriesExpand: 500,
+    requestWindowStart: "06:00",
+    requestWindowEnd: "18:00"
+  };
+
+  let currentUser = { id:null, title:'', email:'', isAdmin:false, groups:[] };
+  let rooms = [];
+  let calendar = null;
+
+  /* ---------- Helpers ---------- */
+  function timeStringToMinutes(hhmm){
+    if(!hhmm) return null;
+    const parts = String(hhmm).split(':');
+    if(parts.length < 2) return null;
+    const h = parseInt(parts[0],10) || 0;
+    const m = parseInt(parts[1],10) || 0;
+    return h*60 + m;
+  }
+  function minutesToTimeString(min){
+    const h = Math.floor(min/60);
+    const m = min % 60;
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':00';
+  }
+  function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function toLocalDateTimeString(date){ const pad=n=>String(n).padStart(2,'0'); const y=date.getFullYear(); const m=pad(date.getMonth()+1); const d=pad(date.getDate()); const hh=pad(date.getHours()); const mm=pad(date.getMinutes()); return `${y}-${m}-${d}T${hh}:${mm}`; }
+  function showModal(html){ $("#modal-root").html(`<div class="modal-backdrop">${html}</div>`).show(); }
+  function closeModal(){ $("#modal-root").hide().empty(); }
+
+  /* ---------- JSOM helpers ---------- */
+  function ensureJSOM(callback){
+    if(typeof SP !== 'undefined' && SP.ClientContext){ callback(); return; }
+    if(window.SP && window.SP.SOD && window.SP.SOD.executeFunc){
+      SP.SOD.executeFunc('sp.js','SP.ClientContext', function(){ callback(); });
+    } else {
+      const start = Date.now();
+      const check = function(){
+        if(typeof SP !== 'undefined' && SP.ClientContext) callback();
+        else if(Date.now() - start < 10000) setTimeout(check, 200);
+        else callback();
+      };
+      check();
+    }
+  }
+  function jsomExec(fn){
+    return new Promise((resolve, reject) => {
+      try {
+        ensureJSOM(() => {
+          try {
+            fn(function(res){ resolve(res); }, function(err){ reject(err); });
+          } catch(e){
+            reject(e);
+          }
+        });
+      } catch(e){
+        reject(e);
+      }
+    });
+  }
+
+  /* ---------- REST helpers ---------- */
+  function webAbsoluteUrl(){
+    return (typeof _spPageContextInfo !== 'undefined' && _spPageContextInfo.webAbsoluteUrl) ? _spPageContextInfo.webAbsoluteUrl.replace(/\/+$/,'') : window.location.origin.replace(/\/+$/,'');
+  }
+  function getRequestDigest(){
+    return fetch(webAbsoluteUrl() + "/_api/contextinfo", { method: "POST", headers: { "Accept": "application/json;odata=verbose" } })
+      .then(r => { if(!r.ok) return r.text().then(t => Promise.reject("contextinfo failed: " + r.status + " " + r.statusText + " - " + t)); return r.json(); })
+      .then(j => j.d.GetContextWebInformation.FormDigestValue);
+  }
+  function getListEntityType(listTitle){
+    const url = `${webAbsoluteUrl()}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')?$select=ListItemEntityTypeFullName`;
+    return fetch(url, { method: "GET", headers: { "Accept":"application/json;odata=verbose" } })
+      .then(r => { if(!r.ok) return r.text().then(t => Promise.reject("getListEntityType failed: " + r.status + " " + r.statusText + " - " + t)); return r.json(); })
+      .then(j => j.d.ListItemEntityTypeFullName);
+  }
+  function createListItemREST(listTitle, fields){
+    return getListEntityType(listTitle).then(entityType => {
+      return getRequestDigest().then(digest => {
+        const url = `${webAbsoluteUrl()}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items`;
+        const bodyObj = Object.assign({ "__metadata": { "type": entityType } }, fields);
+        return fetch(url, {
+          method: "POST",
+          headers: {
+            "Accept": "application/json;odata=verbose",
+            "Content-Type": "application/json;odata=verbose",
+            "X-RequestDigest": digest
+          },
+          body: JSON.stringify(bodyObj)
+        }).then(r => { if(!r.ok) return r.text().then(t => Promise.reject("createListItemREST failed: " + r.status + " " + r.statusText + " - " + t)); return r.json(); });
+      });
+    });
+  }
+
+  /* ---------- Current user ---------- */
+  function fastInitUserFromPageContext(){
+    if(window._spPageContextInfo){
+      try{
+        currentUser.id = window._spPageContextInfo.userId || null;
+        currentUser.title = window._spPageContextInfo.userDisplayName || window._spPageContextInfo.userLoginName || '';
+        currentUser.email = window._spPageContextInfo.userEmail || '';
+      }catch(e){}
+    }
+    $("#sp-user").text(currentUser.title || '—');
+  }
+  function loadCurrentUser(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(() => {
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const u = ctx.get_web().get_currentUser();
+          ctx.load(u);
+          ctx.executeQueryAsync(function(){
+            currentUser.id = u.get_id();
+            currentUser.title = u.get_title();
+            currentUser.email = u.get_email() || '';
+            currentUser.isAdmin = false;
+            succ(currentUser);
+          }, function(s,a){ fail(a.get_message()); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+  function loadUserGroups(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(() => {
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const user = ctx.get_web().get_currentUser();
+          const groups = user.get_groups();
+          ctx.load(groups);
+          ctx.executeQueryAsync(function(){
+            const arr = [];
+            const en = groups.getEnumerator();
+            while(en.moveNext()) arr.push(en.get_current().get_title());
+            currentUser.groups = arr;
+            succ(arr);
+          }, function(){ currentUser.groups = []; succ([]); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  /* ---------- Admins & fields helpers ---------- */
+  function ensureFieldsOnList(listTitle, fields){
+    return new Promise((resolve,reject)=>{
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(listTitle);
+          const fCollection = list.get_fields();
+          let i=0, results=[];
+          function next(){
+            if(i>=fields.length){ resolve(results); return; }
+            const f = fields[i++];
+            try{
+              const fld = fCollection.getByInternalNameOrTitle(f.internalName);
+              ctx.load(fld);
+              ctx.executeQueryAsync(function(){ results.push({field:f.internalName,exists:true}); next(); }, function(){
+                try{ fCollection.addFieldAsXml(f.fieldXml, true, SP.AddFieldOptions.defaultValue); }catch(e){}
+                ctx.executeQueryAsync(function(){ results.push({field:f.internalName,added:true}); next(); }, function(s,a){ results.push({field:f.internalName,addFailed:true, message: a && a.get_message ? a.get_message() : JSON.stringify(a)}); next(); });
+              });
+            } catch(e){
+              try{ fCollection.addFieldAsXml(f.fieldXml, true, SP.AddFieldOptions.defaultValue); }catch(er){}
+              ctx.executeQueryAsync(function(){ results.push({field:f.internalName,added:true}); next(); }, function(s,a){ results.push({field:f.internalName,addFailed:true, message: a && a.get_message ? a.get_message() : JSON.stringify(a)}); next(); });
+            }
+          }
+          next();
+        }catch(e){ reject(e); }
+      });
+    });
+  }
+
+  function ensureListAndFields(listTitle, templateType, fields){
+    return new Promise((resolve,reject)=>{
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const web = ctx.get_web();
+          const lists = web.get_lists();
+          let list;
+          try{ list = lists.getByTitle(listTitle); ctx.load(list); } catch(e){ list = null; }
+          ctx.executeQueryAsync(function(){
+            ensureFieldsOnList(listTitle, fields).then(res=>resolve({created:false, details:res})).catch(err=>resolve({created:false, details:err}));
+          }, function(){
+            const ci = new SP.ListCreationInformation();
+            ci.set_title(listTitle);
+            ci.set_templateType(templateType);
+            const created = lists.add(ci);
+            ctx.load(created);
+            ctx.executeQueryAsync(function(){
+              ensureFieldsOnList(listTitle, fields).then(res=>resolve({created:true, details:res})).catch(err=>resolve({created:true, details:err}));
+            }, function(s,a){ reject(a && a.get_message ? a.get_message() : JSON.stringify(a)); });
+          });
+        }catch(e){ reject(e); }
+      });
+    });
+  }
+
+  function ensureAdminsListPersonField(){
+    const adminUserFieldXml = "<Field Type='User' Name='AdminUser' StaticName='AdminUser' DisplayName='AdminUser' UserSelectionMode='PeopleOnly' Mult='FALSE' />";
+    const emailFieldXml = "<Field DisplayName='Email' Type='Text' StaticName='Email' Name='Email' />";
+    const titleXml = "<Field DisplayName='Title' Type='Text' StaticName='Title' Name='Title' />";
+    return ensureListAndFields(CONFIG.adminsListTitle, 100, [
+      { internalName:'AdminUser', fieldXml: adminUserFieldXml },
+      { internalName:'Email', fieldXml: emailFieldXml },
+      { internalName:'Title', fieldXml: titleXml }
+    ]).then(res=>{
+      return migrateAdminsEmailToPerson().then(()=>res).catch(()=>res);
+    });
+  }
+
+  function migrateAdminsEmailToPerson(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const web = ctx.get_web();
+          const list = web.get_lists().getByTitle(CONFIG.adminsListTitle);
+          const caml = new SP.CamlQuery(); caml.set_viewXml("<View><RowLimit>500</RowLimit></View>");
+          const items = list.getItems(caml);
+          ctx.load(items);
+          ctx.executeQueryAsync(function(){
+            const en = items.getEnumerator();
+            const toProcess = [];
+            while(en.moveNext()){
+              const it = en.get_current();
+              const adminUser = it.get_item('AdminUser');
+              const email = it.get_item('Email') || '';
+              if((!adminUser || adminUser === null) && email){
+                toProcess.push({ id: it.get_id(), email: email });
+              }
+            }
+            if(toProcess.length === 0){ succ(true); return; }
+            let idx = 0;
+            function next(){
+              if(idx >= toProcess.length){ succ(true); return; }
+              const p = toProcess[idx++];
+              const ensured = web.ensureUser(p.email);
+              ctx.load(ensured);
+              ctx.executeQueryAsync(function(){
+                const uid = ensured.get_id();
+                const item = list.getItemById(p.id);
+                try { item.set_item('AdminUserId', uid); } catch(e){}
+                try { item.set_item('Email', p.email); } catch(e){}
+                item.update();
+                ctx.executeQueryAsync(function(){ next(); }, function(){ next(); });
+              }, function(){ next(); });
+            }
+            next();
+          }, function(){ succ(true); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  function checkAdminsAndMembership(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const lists = ctx.get_web().get_lists();
+          let list;
+          try{ list = lists.getByTitle(CONFIG.adminsListTitle); ctx.load(list); } catch(e){ list = null; }
+          ctx.executeQueryAsync(function(){
+            const caml = new SP.CamlQuery(); caml.set_viewXml("<View><RowLimit>500</RowLimit></View>");
+            const items = list.getItems(caml);
+            ctx.load(items);
+            ctx.executeQueryAsync(function(){
+              const en = items.getEnumerator(); let isMember = false;
+              while(en.moveNext()){
+                const it = en.get_current();
+                const adminUser = it.get_item('AdminUser');
+                if(adminUser && adminUser.get_lookupId && adminUser.get_lookupId() === currentUser.id){ isMember = true; break; }
+                const email = (it.get_item('Email')||'').toLowerCase();
+                if(email && currentUser.email && email === currentUser.email.toLowerCase()){ isMember = true; break; }
+              }
+              if(isMember) currentUser.isAdmin = true;
+              succ({ exists:true, isMember });
+            }, function(){ succ({ exists:true, isMember:false }); });
+          }, function(){ succ({ exists:false, isMember:false }); });
+        }catch(e){ succ({ exists:false, isMember:false }); }
+      });
+    });
+  }
+
+  /* ---------- createOrUpdateAllListsJSOM (robust) ---------- */
+  function createOrUpdateAllListsJSOM(noAutoAddAdmin){
+    const wanted = [
+      { title: CONFIG.calendarListTitle, tpl:106, fields: [
+        { internalName:'Status', fieldXml: "<Field DisplayName='Status' Type='Choice' Format='Dropdown' StaticName='Status' Name='Status'><CHOICES><CHOICE>Pending</CHOICE><CHOICE>Approved</CHOICE><CHOICE>Rejected</CHOICE><CHOICE>Cancelled</CHOICE><CHOICE>Blocked</CHOICE></CHOICES></Field>" },
+        { internalName:'UsePurpose', fieldXml: "<Field DisplayName='UsePurpose' Type='Text' StaticName='UsePurpose' Name='UsePurpose' />" },
+        { internalName:'Requester', fieldXml: "<Field Type='User' Name='Requester' StaticName='Requester' DisplayName='Requester' UserSelectionMode='PeopleOnly' Mult='FALSE' />" },
+        { internalName:'BlockToken', fieldXml: "<Field DisplayName='BlockToken' Type='Text' StaticName='BlockToken' Name='BlockToken' />" },
+        { internalName:'RecurrencePatternJson', fieldXml: "<Field DisplayName='RecurrencePatternJson' Type='Note' StaticName='RecurrencePatternJson' Name='RecurrencePatternJson' />" },
+        { internalName:'RecurrenceData', fieldXml: "<Field DisplayName='RecurrenceData' Type='Note' StaticName='RecurrenceData' Name='RecurrenceData' />" }
+      ]},
+      { title: CONFIG.roomsListTitle, tpl:100, fields: [
+        { internalName:'Location', fieldXml: "<Field DisplayName='Location' Type='Text' StaticName='Location' Name='Location' />" },
+        { internalName:'Color', fieldXml: "<Field DisplayName='Color' Type='Text' StaticName='Color' Name='Color' />" }
+      ]},
+      { title: CONFIG.blockListTitle, tpl:106, fields: [
+        { internalName:'LinkedCalendarItem', fieldXml: "<Field DisplayName='LinkedCalendarItem' Type='Number' StaticName='LinkedCalendarItem' Name='LinkedCalendarItem' />" },
+        { internalName:'Location', fieldXml: "<Field DisplayName='Location' Type='Text' StaticName='Location' Name='Location' />" },
+        { internalName:'RecurrencePatternJson', fieldXml: "<Field DisplayName='RecurrencePatternJson' Type='Note' StaticName='RecurrencePatternJson' Name='RecurrencePatternJson' />" },
+        { internalName:'RecurrenceData', fieldXml: "<Field DisplayName='RecurrenceData' Type='Note' StaticName='RecurrenceData' Name='RecurrenceData' />" }
+      ]},
+      { title: CONFIG.configListTitle, tpl:100, fields: [
+        { internalName:'MailNotify', fieldXml: "<Field DisplayName='MailNotify' Type='Text' StaticName='MailNotify' Name='MailNotify' />" },
+        { internalName:'MailTemplate_NewRequest', fieldXml: "<Field DisplayName='MailTemplate_NewRequest' Type='Note' StaticName='MailTemplate_NewRequest' Name='MailTemplate_NewRequest' />" },
+        { internalName:'MailTemplate_StatusChange', fieldXml: "<Field DisplayName='MailTemplate_StatusChange' Type='Note' StaticName='MailTemplate_StatusChange' Name='MailTemplate_StatusChange' />" },
+        { internalName:'RequestWindowStart', fieldXml: "<Field DisplayName='RequestWindowStart' Type='Text' StaticName='RequestWindowStart' Name='RequestWindowStart' />" },
+        { internalName:'RequestWindowEnd', fieldXml: "<Field DisplayName='RequestWindowEnd' Type='Text' StaticName='RequestWindowEnd' Name='RequestWindowEnd' />" }
+      ]},
+      { title: CONFIG.adminsListTitle, tpl:100, fields: [
+        { internalName:'AdminUser', fieldXml: "<Field Type='User' Name='AdminUser' StaticName='AdminUser' DisplayName='AdminUser' UserSelectionMode='PeopleOnly' Mult='FALSE' />" },
+        { internalName:'Email', fieldXml: "<Field DisplayName='Email' Type='Text' StaticName='Email' Name='Email' />" },
+        { internalName:'Title', fieldXml: "<Field DisplayName='Title' Type='Text' StaticName='Title' Name='Title' />" }
+      ]}
+    ];
+
+    return new Promise((resolve, reject) => {
+      jsomExec((succ, fail) => {
+        ensureJSOM(()=> {
+          try{
+            const ctx = SP.ClientContext.get_current();
+            const web = ctx.get_web();
+            const lists = web.get_lists();
+            let i = 0;
+            const results = [];
+            const failures = [];
+
+            function processNext(){
+              if(i >= wanted.length){
+                if(failures.length>0) reject(failures.join(" | "));
+                else resolve(results);
+                return;
+              }
+              const w = wanted[i++];
+              try{
+                const list = lists.getByTitle(w.title);
+                ctx.load(list);
+                ctx.executeQueryAsync(function(){
+                  ensureFieldsOnList(w.title, w.fields).then(fieldRes=>{
+                    results.push({ list: w.title, created:false, fields: fieldRes });
+                    processNext();
+                  }).catch(fe=>{
+                    results.push({ list:w.title, created:false, fieldsError:fe });
+                    failures.push(`Felder für '${w.title}' konnten nicht sichergestellt werden: ${JSON.stringify(fe)}`);
+                    processNext();
+                  });
+                }, function(s,a){
+                  // create
+                  try{
+                    const ci = new SP.ListCreationInformation();
+                    ci.set_title(w.title);
+                    ci.set_templateType(w.tpl);
+                    const created = lists.add(ci);
+                    ctx.load(created);
+                    ctx.executeQueryAsync(function(){
+                      ensureFieldsOnList(w.title, w.fields).then(fieldRes=>{
+                        results.push({ list:w.title, created:true, fields: fieldRes });
+                        processNext();
+                      }).catch(fe=>{
+                        results.push({ list:w.title, created:true, fieldsError:fe });
+                        failures.push(`Felder für neu erstellte Liste '${w.title}' konnten nicht sichergestellt werden: ${JSON.stringify(fe)}`);
+                        processNext();
+                      });
+                    }, function(s2,a2){
+                      const msg = (a2 && a2.get_message) ? a2.get_message() : JSON.stringify(a2);
+                      results.push({ list:w.title, createFailed:true, message:msg });
+                      failures.push(`Liste '${w.title}' konnte nicht erstellt werden: ${msg}`);
+                      processNext();
+                    });
+                  }catch(e){
+                    results.push({ list:w.title, createError: e.message || JSON.stringify(e) });
+                    failures.push(`Liste '${w.title}' create error: ${e.message || JSON.stringify(e)}`);
+                    processNext();
+                  }
+                });
+              }catch(e){
+                results.push({ list:w.title, getError: e.message || JSON.stringify(e) });
+                failures.push(`Liste '${w.title}' get error: ${e.message || JSON.stringify(e)}`);
+                processNext();
+              }
+            }
+
+            processNext();
+          }catch(e){ fail(e); }
+        });
+      }).catch(err => {
+        const msg = (err && err.get_message) ? err.get_message() : (err && err.message) ? err.message : JSON.stringify(err);
+        reject("JSOM initialisation error: " + msg);
+      });
+    });
+  }
+
+  /* ---------- Config load/save (robust) ---------- */
+  function loadConfigItem(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(CONFIG.configListTitle);
+          const caml = new SP.CamlQuery(); caml.set_viewXml("<View><RowLimit>1</RowLimit></View>");
+          const items = list.getItems(caml);
+          ctx.load(items);
+          ctx.executeQueryAsync(function(){
+            const en = items.getEnumerator();
+            if(en.moveNext()){
+              const it = en.get_current();
+              CONFIG.mailNotifyAddress = it.get_item('MailNotify') || CONFIG.mailNotifyAddress;
+              CONFIG.mailTemplateNewRequest = it.get_item('MailTemplate_NewRequest') || CONFIG.mailTemplateNewRequest;
+              CONFIG.mailTemplateStatusChange = it.get_item('MailTemplate_StatusChange') || CONFIG.mailTemplateStatusChange;
+              CONFIG.requestWindowStart = it.get_item('RequestWindowStart') || CONFIG.requestWindowStart;
+              CONFIG.requestWindowEnd = it.get_item('RequestWindowEnd') || CONFIG.requestWindowEnd;
+            }
+            succ(true);
+          }, function(){ succ(false); });
+        }catch(e){ succ(false); }
+      });
+    });
+  }
+
+  function saveConfigItem(values){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const web = ctx.get_web();
+          const lists = web.get_lists();
+
+          let cfgList = null;
+          try {
+            cfgList = lists.getByTitle(CONFIG.configListTitle);
+            ctx.load(cfgList);
+            ctx.executeQueryAsync(function(){
+              proceedWithList(cfgList);
+            }, function(sender,args){
+              tryCreateListAndProceed();
+            });
+          } catch(e){
+            tryCreateListAndProceed();
+          }
+
+          function tryCreateListAndProceed(){
+            try {
+              const ci = new SP.ListCreationInformation();
+              ci.set_title(CONFIG.configListTitle);
+              ci.set_templateType(100);
+              cfgList = lists.add(ci);
+              ctx.load(cfgList);
+              ctx.executeQueryAsync(function(){ proceedWithList(cfgList); }, function(s,a){
+                const msg = (a && a.get_message) ? a.get_message() : JSON.stringify(a);
+                fail("Konfigurationsliste konnte nicht erstellt werden: " + msg);
+              });
+            } catch(e){
+              fail("Konfigurationsliste konnte nicht erstellt werden: " + (e.message || JSON.stringify(e)));
+            }
+          }
+
+          function proceedWithList(listObj){
+            const fields = [
+              { internalName:'MailNotify', fieldXml: "<Field DisplayName='MailNotify' Type='Text' StaticName='MailNotify' Name='MailNotify' />" },
+              { internalName:'MailTemplate_NewRequest', fieldXml: "<Field DisplayName='MailTemplate_NewRequest' Type='Note' StaticName='MailTemplate_NewRequest' Name='MailTemplate_NewRequest' />" },
+              { internalName:'MailTemplate_StatusChange', fieldXml: "<Field DisplayName='MailTemplate_StatusChange' Type='Note' StaticName='MailTemplate_StatusChange' Name='MailTemplate_StatusChange' />" },
+              { internalName:'RequestWindowStart', fieldXml: "<Field DisplayName='RequestWindowStart' Type='Text' StaticName='RequestWindowStart' Name='RequestWindowStart' />" },
+              { internalName:'RequestWindowEnd', fieldXml: "<Field DisplayName='RequestWindowEnd' Type='Text' StaticName='RequestWindowEnd' Name='RequestWindowEnd' />" }
+            ];
+
+            const fldCollection = listObj.get_fields();
+            let i = 0;
+            const addedResults = [];
+
+            function nextField(){
+              if(i >= fields.length){
+                writeConfigItem();
+                return;
+              }
+              const f = fields[i++];
+              try {
+                const existing = fldCollection.getByInternalNameOrTitle(f.internalName);
+                ctx.load(existing);
+                ctx.executeQueryAsync(function(){
+                  addedResults.push({ field: f.internalName, status: 'exists' });
+                  nextField();
+                }, function(){
+                  try { fldCollection.addFieldAsXml(f.fieldXml, true, SP.AddFieldOptions.defaultValue); }catch(e){}
+                  ctx.executeQueryAsync(function(){ addedResults.push({ field: f.internalName, status: 'added' }); nextField(); }, function(s,a){ addedResults.push({ field: f.internalName, status: 'addFailed', message: (a && a.get_message)?a.get_message():JSON.stringify(a)}); nextField(); });
+                });
+              } catch(e){
+                try { fldCollection.addFieldAsXml(f.fieldXml, true, SP.AddFieldOptions.defaultValue); }catch(er){}
+                ctx.executeQueryAsync(function(){ addedResults.push({ field: f.internalName, status: 'added' }); nextField(); }, function(s,a){ addedResults.push({ field: f.internalName, status: 'addFailed', message: (a && a.get_message)?a.get_message():JSON.stringify(a)}); nextField(); });
+              }
+            }
+
+            function writeConfigItem(){
+              try{
+                const caml = new SP.CamlQuery(); caml.set_viewXml("<View><RowLimit>1</RowLimit></View>");
+                const items = listObj.getItems(caml);
+                ctx.load(items);
+                ctx.executeQueryAsync(function(){
+                  const en = items.getEnumerator();
+                  if(en.moveNext()){
+                    const it = en.get_current();
+                    try { it.set_item('MailNotify', values.MailNotify || ''); } catch(e){}
+                    try { it.set_item('MailTemplate_NewRequest', values.MailTemplate_NewRequest || ''); } catch(e){}
+                    try { it.set_item('MailTemplate_StatusChange', values.MailTemplate_StatusChange || ''); } catch(e){}
+                    try { it.set_item('RequestWindowStart', values.RequestWindowStart || ''); } catch(e){}
+                    try { it.set_item('RequestWindowEnd', values.RequestWindowEnd || ''); } catch(e){}
+                    it.update();
+                    ctx.executeQueryAsync(function(){ succ({ ok:true, fields: addedResults }); }, function(s,a){ const msg = (a && a.get_message) ? a.get_message() : JSON.stringify(a); fail("Konfiguration konnte nicht aktualisiert werden: " + msg); });
+                  } else {
+                    const info = new SP.ListItemCreationInformation();
+                    const newIt = listObj.addItem(info);
+                    newIt.set_item('Title','Configuration');
+                    try { newIt.set_item('MailNotify', values.MailNotify || ''); } catch(e){}
+                    try { newIt.set_item('MailTemplate_NewRequest', values.MailTemplate_NewRequest || ''); } catch(e){}
+                    try { newIt.set_item('MailTemplate_StatusChange', values.MailTemplate_StatusChange || ''); } catch(e){}
+                    try { newIt.set_item('RequestWindowStart', values.RequestWindowStart || ''); } catch(e){}
+                    try { newIt.set_item('RequestWindowEnd', values.RequestWindowEnd || ''); } catch(e){}
+                    newIt.update();
+                    ctx.executeQueryAsync(function(){ succ({ ok:true, fields: addedResults }); }, function(s,a){ const msg = (a && a.get_message) ? a.get_message() : JSON.stringify(a); fail("Konfiguration konnte nicht angelegt werden: " + msg); });
+                  }
+                }, function(s,a){ const msg = (a && a.get_message) ? a.get_message() : JSON.stringify(a); fail("Konfigurationsliste konnte nicht gelesen werden: " + msg); });
+              } catch(e){
+                fail("Fehler beim Schreiben der Konfiguration: " + (e.message || JSON.stringify(e)));
+              }
+            }
+
+            nextField();
+          }
+
+        }catch(e){ fail("saveConfigItem internal error: " + (e.message || JSON.stringify(e))); }
+      });
+    });
+  }
+
+  /* ---------- Rooms / Blocks / Events ---------- */
+  function loadRooms(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(CONFIG.roomsListTitle);
+          const caml = new SP.CamlQuery(); caml.set_viewXml("<View><RowLimit>500</RowLimit></View>");
+          const items = list.getItems(caml);
+          ctx.load(items);
+          ctx.executeQueryAsync(function(){
+            const arr=[]; const en=items.getEnumerator();
+            while(en.moveNext()){ const it=en.get_current(); arr.push({ id: it.get_id(), title: it.get_item('Title'), location: it.get_item('Location') || it.get_item('Title'), color: it.get_item('Color') || CONFIG.berry }); }
+            succ(arr);
+          }, function(){ succ([]); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  function loadBlocks(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(CONFIG.blockListTitle);
+          const caml = new SP.CamlQuery(); caml.set_viewXml("<View><RowLimit>500</RowLimit></View>");
+          const items = list.getItems(caml);
+          ctx.load(items);
+          ctx.executeQueryAsync(function(){
+            const arr=[]; const en=items.getEnumerator();
+            while(en.moveNext()){ const it=en.get_current(); arr.push({ id:'block-'+it.get_id(), title: it.get_item('Title')||'Geblockt', start: it.get_item('EventDate'), end: it.get_item('EndDate'), blocked:true, spItemId: it.get_id(), linkedCalendarItem: it.get_item('LinkedCalendarItem') || null, location: it.get_item('Location') || '', isRecurrenceMaster: !!it.get_item('fRecurrence'), recurrencePatternJson: it.get_item('RecurrencePatternJson') || null, recurrenceData: it.get_item('RecurrenceData') || null }); }
+            succ(arr);
+          }, function(){ succ([]); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  /* ---------- Recurrence helpers ---------- */
+  function buildRecurrenceDataXML(pattern){
+    const firstDayOfWeek = 'mo';
+    let repeatTag = '';
+    if(pattern.freq === 'daily'){
+      repeatTag = `<daily interval="${pattern.interval || 1}" />`;
+    } else if(pattern.freq === 'weekly'){
+      const days = (pattern.weekdays && pattern.weekdays.length) ? pattern.weekdays.join(',') : 'mo';
+      repeatTag = `<weekly interval="${pattern.interval || 1}" day="${days}" />`;
+    } else if(pattern.freq === 'monthly'){
+      if(pattern.monthlyOption === 'day'){
+        repeatTag = `<monthly interval="${pattern.interval || 1}" day="${pattern.day}" />`;
+      } else {
+        repeatTag = `<monthlyByDay interval="${pattern.interval || 1}" weekday="${pattern.weekday.day}" week="${pattern.weekday.weekIndex}" />`;
+      }
+    } else if(pattern.freq === 'yearly'){
+      if(pattern.monthlyOption === 'day'){
+        repeatTag = `<yearly month="${pattern.month}" day="${pattern.day}" />`;
+      } else {
+        repeatTag = `<yearlyByDay month="${pattern.month}" weekday="${pattern.weekday.day}" week="${pattern.weekday.weekIndex}" />`;
+      }
+    } else {
+      repeatTag = `<daily interval="1" />`;
+    }
+
+    let endPart = '';
+    if(pattern.endType === 'after' && pattern.count){
+      endPart = `<repeatInstances>${pattern.count}</repeatInstances>`;
+    } else if(pattern.endType === 'until' && pattern.until){
+      const until = new Date(pattern.until);
+      const windowEnd = new Date(until.getTime());
+      windowEnd.setHours(23,59,59,0);
+      endPart = `<windowEnd>${windowEnd.toISOString()}</windowEnd>`;
+    }
+
+    const windowStart = (pattern.start) ? new Date(pattern.start).toISOString() : new Date().toISOString();
+    const xmlParts = [
+      `<recurrence>`,
+      `<rule>`,
+      `<firstDayOfWeek>${firstDayOfWeek}</firstDayOfWeek>`,
+      `<repeat>`,
+      repeatTag,
+      `</repeat>`,
+      endPart ? endPart : '',
+      `<windowStart>${windowStart}</windowStart>`,
+      `</rule>`,
+      `</recurrence>`
+    ];
+    return xmlParts.join('');
+  }
+
+  function expandRecurrence(pattern){
+    const occurrences = [];
+    const start = new Date(pattern.start);
+    const durationMs = (new Date(pattern.end)).getTime() - start.getTime();
+    const maxCount = pattern.endType === 'after' ? Math.min(pattern.count || CONFIG.maxSeriesExpand, CONFIG.maxSeriesExpand) : CONFIG.maxSeriesExpand;
+    const until = pattern.endType === 'until' && pattern.until ? new Date(pattern.until) : null;
+
+    if(pattern.freq === 'daily'){
+      const interval = pattern.interval || 1;
+      let i=0;
+      let cur = new Date(start);
+      while(occurrences.length < maxCount){
+        if(until && cur > until) break;
+        occurrences.push({ start: new Date(cur), end: new Date(cur.getTime()+durationMs) });
+        cur.setDate(cur.getDate()+interval);
+        i++; if(i>CONFIG.maxSeriesExpand) break;
+      }
+      return occurrences;
+    }
+
+    if(pattern.freq === 'weekly'){
+      const interval = pattern.interval || 1;
+      const weekdays = (pattern.weekdays && pattern.weekdays.length) ? pattern.weekdays : ['mo'];
+      const dayIndexMap = { 'su':0,'mo':1,'tu':2,'we':3,'th':4,'fr':5,'sa':6 };
+      let weekStart = new Date(start);
+      weekStart.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+      let iter = 0;
+      while(occurrences.length < maxCount){
+        for(let d=0; d<7 && occurrences.length < maxCount; d++){
+          const candidate = new Date(weekStart);
+          candidate.setDate(weekStart.getDate() + d);
+          candidate.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+          const wday = candidate.getDay();
+          const wkey = Object.keys(dayIndexMap).find(k=>dayIndexMap[k]===wday);
+          if(weekdays.indexOf(wkey) !== -1){
+            if(candidate >= start){
+              if(until && candidate > until) {}
+              else occurrences.push({ start: new Date(candidate), end: new Date(candidate.getTime()+durationMs) });
+            }
+          }
+        }
+        weekStart.setDate(weekStart.getDate() + (7 * (interval || 1)));
+        iter++; if(iter>CONFIG.maxSeriesExpand) break;
+      }
+      return occurrences;
+    }
+
+    if(pattern.freq === 'monthly'){
+      const interval = pattern.interval || 1;
+      let currentMonth = start.getMonth();
+      let currentYear = start.getFullYear();
+      let i=0;
+      while(occurrences.length < maxCount){
+        if(pattern.monthlyOption === 'day'){
+          const day = pattern.day || start.getDate();
+          const candidate = new Date(currentYear, currentMonth, day, start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+          if(candidate >= start && (!until || candidate <= until)) occurrences.push({ start: candidate, end: new Date(candidate.getTime()+durationMs) });
+        } else {
+          const wk = pattern.weekday.weekIndex;
+          const dayKey = pattern.weekday.day;
+          const dayIndexMap = { 'su':0,'mo':1,'tu':2,'we':3,'th':4,'fr':5,'sa':6 };
+          const desiredD = dayIndexMap[dayKey];
+          if(wk > 0){
+            let candidate = new Date(currentYear, currentMonth, 1, start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+            const firstDow = candidate.getDay();
+            let diff = desiredD - firstDow;
+            if(diff < 0) diff += 7;
+            candidate.setDate(1 + diff + (wk-1)*7);
+            if(candidate.getMonth()===currentMonth){
+              if(candidate >= start && (!until || candidate <= until)) occurrences.push({ start: candidate, end: new Date(candidate.getTime()+durationMs) });
+            }
+          } else {
+            let candidate = new Date(currentYear, currentMonth+1, 0, start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+            let lastDow = candidate.getDay();
+            let diff = lastDow - desiredD;
+            if(diff < 0) diff += 7;
+            candidate.setDate(candidate.getDate() - diff);
+            if(candidate >= start && (!until || candidate <= until)) occurrences.push({ start: candidate, end: new Date(candidate.getTime()+durationMs) });
+          }
+        }
+        currentMonth += interval;
+        while(currentMonth > 11){ currentMonth -= 12; currentYear++; }
+        i++; if(i>CONFIG.maxSeriesExpand) break;
+      }
+      return occurrences;
+    }
+
+    if(pattern.freq === 'yearly'){
+      const interval = pattern.interval || 1;
+      let year = start.getFullYear();
+      let iter = 0;
+      while(occurrences.length < maxCount){
+        if(pattern.monthlyOption === 'day'){
+          const month = (typeof pattern.month === 'number') ? (pattern.month-1) : start.getMonth();
+          const day = pattern.day || start.getDate();
+          const candidate = new Date(year, month, day, start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+          if(candidate >= start && (!until || candidate <= until)) occurrences.push({ start: candidate, end: new Date(candidate.getTime()+durationMs) });
+        } else {
+          const month = (typeof pattern.month === 'number') ? (pattern.month-1) : start.getMonth();
+          const dayKey = pattern.weekday.day;
+          const wk = pattern.weekday.weekIndex;
+          const dayIndexMap = { 'su':0,'mo':1,'tu':2,'we':3,'th':4,'fr':5,'sa':6 };
+          const desiredD = dayIndexMap[dayKey];
+          if(wk > 0){
+            let candidate = new Date(year, month, 1, start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+            const firstDow = candidate.getDay();
+            let diff = desiredD - firstDow;
+            if(diff < 0) diff += 7;
+            candidate.setDate(1 + diff + (wk-1)*7);
+            if(candidate >= start && (!until || candidate <= until)) occurrences.push({ start: candidate, end: new Date(candidate.getTime()+durationMs) });
+          } else {
+            let candidate = new Date(year, month+1, 0, start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+            let lastDow = candidate.getDay();
+            let diff = lastDow - desiredD;
+            if(diff < 0) diff += 7;
+            candidate.setDate(candidate.getDate() - diff);
+            if(candidate >= start && (!until || candidate <= until)) occurrences.push({ start: candidate, end: new Date(candidate.getTime()+durationMs) });
+          }
+        }
+        year += interval;
+        iter++; if(iter>CONFIG.maxSeriesExpand) break;
+      }
+      return occurrences;
+    }
+
+    return [{ start: new Date(start), end: new Date(start.getTime() + durationMs) }];
+  }
+
+  /* ---------- loadEvents (full) ---------- */
+  function loadEvents(rangeStartISO, rangeEndISO){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=> {
+        try {
+          const start = rangeStartISO, end = rangeEndISO;
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(CONFIG.calendarListTitle);
+          const caml = new SP.CamlQuery();
+          const viewXml = "<View><Query><Where><And><Lt><FieldRef Name='EventDate' /><Value IncludeTimeValue='TRUE' Type='DateTime'>" + end + "</Value></Lt><Gt><FieldRef Name='EndDate' /><Value IncludeTimeValue='TRUE' Type='DateTime'>" + start + "</Value></Gt></And></Where></Query><RowLimit>500</RowLimit></View>";
+          caml.set_viewXml(viewXml);
+          const items = list.getItems(caml);
+          ctx.load(items, 'Include(Id, Title, EventDate, EndDate, Status, Location, UsePurpose, Requester, BlockToken, fRecurrence, RecurrencePatternJson, RecurrenceData)');
+          ctx.executeQueryAsync(function(){
+            const evs=[]; const masters=[]; const en=items.getEnumerator();
+            while(en.moveNext()){
+              const it=en.get_current();
+              const master = {
+                id: it.get_id(),
+                title: (it.get_item('Title')||'') + ((it.get_item('Status') && it.get_item('Status')!=='Approved') ? " ("+it.get_item('Status')+")" : ""),
+                start: it.get_item('EventDate'),
+                end: it.get_item('EndDate'),
+                extendedProps: {
+                  spItemId: it.get_id(),
+                  location: it.get_item('Location')||'',
+                  status: it.get_item('Status')||'',
+                  requester: (it.get_item('Requester') ? it.get_item('Requester').get_lookupValue() : null),
+                  usePurpose: it.get_item('UsePurpose') || '',
+                  blockToken: it.get_item('BlockToken') || '',
+                  isRecurrenceMaster: !!it.get_item('fRecurrence'),
+                  recurrencePatternJson: it.get_item('RecurrencePatternJson') || null,
+                  recurrenceData: it.get_item('RecurrenceData') || null
+                },
+                backgroundColor: (it.get_item('Status')==='Blocked'?'#888':(it.get_item('Status')==='Approved'?'#2D9F4A':CONFIG.berry)),
+                borderColor:'#bfbfbf',
+                textColor:'#fff'
+              };
+              masters.push(master);
+            }
+
+            masters.forEach(m => {
+              if(m.extendedProps.isRecurrenceMaster && m.extendedProps.recurrencePatternJson){
+                try{
+                  const pattern = JSON.parse(m.extendedProps.recurrencePatternJson);
+                  if(!pattern.start) pattern.start = new Date(m.start).toISOString();
+                  if(!pattern.end) pattern.end = new Date(m.end).toISOString();
+                  const occ = expandRecurrence(pattern).filter(o => {
+                    const oStart = new Date(o.start), oEnd = new Date(o.end);
+                    const windowStart = new Date(start), windowEnd = new Date(end);
+                    return !(oEnd <= windowStart || oStart >= windowEnd);
+                  });
+                  occ.forEach((o, idx) => {
+                    evs.push({
+                      id: `ev-${m.id}-occ-${idx}`,
+                      title: m.title,
+                      start: o.start,
+                      end: o.end,
+                      extendedProps: Object.assign({}, m.extendedProps, { spItemId: m.id, recurrenceMasterId: m.id, recurrenceInstanceIndex: idx }),
+                      backgroundColor: m.backgroundColor,
+                      borderColor: m.borderColor,
+                      textColor: m.textColor
+                    });
+                  });
+                }catch(e){
+                  console.warn('Could not parse recurrence JSON for master', m.id, e);
+                  evs.push({
+                    id: `ev-${m.id}`,
+                    title: m.title,
+                    start: m.start,
+                    end: m.end,
+                    extendedProps: m.extendedProps,
+                    backgroundColor: m.backgroundColor,
+                    borderColor: m.borderColor,
+                    textColor: m.textColor
+                  });
+                }
+              } else {
+                evs.push({
+                  id: `ev-${m.id}`,
+                  title: m.title,
+                  start: m.start,
+                  end: m.end,
+                  extendedProps: m.extendedProps,
+                  backgroundColor: m.backgroundColor,
+                  borderColor: m.borderColor,
+                  textColor: m.textColor
+                });
+              }
+            });
+
+            loadBlocks().then(blocks=>{
+              const filteredBlocks = blocks.filter(b=>{
+                const bStart = new Date(b.start), bEnd = new Date(b.end);
+                const overlaps = evs.some(ev=>{
+                  const evStart = new Date(ev.start), evEnd = new Date(ev.end);
+                  const timeOverlap = !(bEnd <= evStart || bStart >= evEnd);
+                  if(!timeOverlap) return false;
+                  if(b.location && ev.extendedProps && ev.extendedProps.location){
+                    return String(b.location) === String(ev.extendedProps.location);
+                  }
+                  return true;
+                });
+                return !overlaps;
+              });
+
+              const blockEvents = filteredBlocks.map(b => {
+                if(b.isRecurrenceMaster && b.recurrencePatternJson){
+                  try{
+                    const pat = JSON.parse(b.recurrencePatternJson);
+                    if(!pat.start) pat.start = b.start;
+                    if(!pat.end) pat.end = b.end;
+                    const occ = expandRecurrence(pat).filter(o=>{
+                      return !(new Date(o.end) <= new Date(rangeStartISO) || new Date(o.start) >= new Date(rangeEndISO));
+                    });
+                    return occ.map((o, idx) => ({ id: `block-${b.spItemId}-occ-${idx}`, title: b.title, start: o.start, end: o.end, display:'background', backgroundColor:'#888', extendedProps:{ blocked:true, spItemId: b.spItemId, linkedCalendarItem: b.linkedCalendarItem, location: b.location } }));
+                  }catch(e){}
+                }
+                return { id: b.id, title: b.title, start: b.start, end: b.end, display:'background', classNames:['fc-blocked'], backgroundColor:'#888', extendedProps: { blocked:true, spItemId: b.spItemId, linkedCalendarItem: b.linkedCalendarItem, location: b.location } };
+              }).flat();
+
+              succ(evs.concat(blockEvents));
+            }).catch(()=>succ(evs));
+          }, function(s,a){ loadBlocks().then(blocks=>succ(blocks)).catch(()=>succ([])); });
+        } catch(e){ fail(e); }
+      });
+    });
+  }
+
+  /* ---------- Create single items and blocks (JSOM) ---------- */
+  function createSingleItemsAndBlocks(occurrences, location, purpose){
+    const token = 'BT_' + Date.now() + '_' + Math.floor(Math.random()*100000);
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const web = ctx.get_web();
+          const calList = web.get_lists().getByTitle(CONFIG.calendarListTitle);
+
+          occurrences.forEach(o=>{
+            const info = new SP.ListItemCreationInformation();
+            const it = calList.addItem(info);
+            it.set_item('Title', (purpose||'Raumbuchung') + ' - ' + currentUser.title);
+            it.set_item('EventDate', o.start);
+            it.set_item('EndDate', o.end);
+            try{ it.set_item('Location', location || ''); }catch(e){}
+            it.set_item('Status','Pending');
+            try{ it.set_item('UsePurpose', purpose||''); }catch(e){}
+            try{ it.set_item('BlockToken', token); }catch(e){}
+            try{ const fu = new SP.FieldUserValue(); fu.set_lookupId(currentUser.id); it.set_item('Requester', fu); } catch(e){}
+            it.update();
+          });
+
+          ctx.executeQueryAsync(function(){
+            const caml = new SP.CamlQuery();
+            caml.set_viewXml("<View><Query><Where><Eq><FieldRef Name='BlockToken' /><Value Type='Text'>" + token + "</Value></Eq></Where></Query><RowLimit>500</RowLimit></View>");
+            const items = calList.getItems(caml);
+            ctx.load(items);
+            ctx.executeQueryAsync(function(){
+              const en = items.getEnumerator();
+              const created = [];
+              while(en.moveNext()){
+                const it2 = en.get_current();
+                created.push({ id: it2.get_id(), start: it2.get_item('EventDate'), end: it2.get_item('EndDate'), location: it2.get_item('Location') || '' });
+              }
+              if(created.length === 0){ succ(true); return; }
+              const blockList = web.get_lists().getByTitle(CONFIG.blockListTitle);
+              created.forEach(ci=>{
+                const bInfo = new SP.ListItemCreationInformation();
+                const bi = blockList.addItem(bInfo);
+                bi.set_item('Title', 'Block for cal #' + ci.id);
+                bi.set_item('EventDate', ci.start);
+                bi.set_item('EndDate', ci.end);
+                try{ bi.set_item('LinkedCalendarItem', ci.id); }catch(e){}
+                try{ bi.set_item('Location', ci.location || ''); }catch(e){}
+                bi.update();
+              });
+              ctx.executeQueryAsync(function(){ succ(true); }, function(s2,a2){ console.warn('Block creation failed', a2.get_message ? a2.get_message() : a2); succ(true); });
+            }, function(s,a){ console.warn('Could not query created calendar items', a.get_message ? a.get_message() : a); succ(true); });
+          }, function(s,a){ fail(a.get_message ? a.get_message() : a); });
+
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  /* ---------- Create series (REST) using RecurrenceData ---------- */
+  function createSeriesInCalendarAndBlocks(pattern){
+    if(!pattern.blockToken) pattern.blockToken = 'BT_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    const recXml = buildRecurrenceDataXML(pattern);
+
+    return new Promise((resolve, reject) => {
+      const calFields = {
+        Title: (pattern.purpose||'Raumbuchung') + ' - ' + currentUser.title,
+        EventDate: (new Date(pattern.start)).toISOString(),
+        EndDate: (new Date(pattern.end)).toISOString(),
+        Location: pattern.location || '',
+        Status: 'Pending',
+        UsePurpose: pattern.purpose || '',
+        BlockToken: pattern.blockToken,
+        fRecurrence: true,
+        RecurrenceData: recXml
+      };
+      if(currentUser && currentUser.id) calFields["RequesterId"] = currentUser.id;
+
+      createListItemREST(CONFIG.calendarListTitle, calFields).then(resp => {
+        const masterId = (resp && resp.d && resp.d.Id) ? resp.d.Id : (resp && resp.Id ? resp.Id : null);
+        if(!masterId){
+          console.warn('calendar master created but id missing (REST response)', resp);
+          resolve(true);
+          return;
+        }
+        const blockFields = {
+          Title: 'Block for series #' + masterId,
+          EventDate: (new Date(pattern.start)).toISOString(),
+          EndDate: (new Date(pattern.end)).toISOString(),
+          LinkedCalendarItem: masterId,
+          Location: pattern.location || '',
+          fRecurrence: true,
+          RecurrenceData: recXml
+        };
+        createListItemREST(CONFIG.blockListTitle, blockFields).then(resp2 => {
+          resolve(true);
+        }).catch(err2 => {
+          console.warn('Block master creation (REST) failed', err2);
+          resolve(true);
+        });
+      }).catch(err => {
+        const msg = (typeof err === 'string') ? err : (err && err.message) ? err.message : JSON.stringify(err);
+        console.error('createSeriesInCalendarAndBlocks (REST) failed', msg);
+        reject(msg);
+      });
+    });
+  }
+
+  /* ---------- Delete / update / sendEmail ---------- */
+  function deleteCalendarAndLinkedBlocks(calendarItemId){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const web = ctx.get_web();
+          const blockList = web.get_lists().getByTitle(CONFIG.blockListTitle);
+          const caml = new SP.CamlQuery();
+          caml.set_viewXml("<View><Query><Where><Eq><FieldRef Name='LinkedCalendarItem' /><Value Type='Number'>" + calendarItemId + "</Value></Eq></Where></Query><RowLimit>500</RowLimit></View>");
+          const blocks = blockList.getItems(caml);
+          ctx.load(blocks);
+          ctx.executeQueryAsync(function(){
+            const en = blocks.getEnumerator();
+            const toDelete = [];
+            while(en.moveNext()){
+              toDelete.push(en.get_current());
+            }
+            toDelete.forEach(it => it.deleteObject());
+            const calList = web.get_lists().getByTitle(CONFIG.calendarListTitle);
+            const calItem = calList.getItemById(calendarItemId);
+            calItem.deleteObject();
+            ctx.executeQueryAsync(function(){ succ(true); }, function(s,a){ fail(a.get_message ? a.get_message() : a); });
+          }, function(s,a){
+            try{
+              const calList = ctx.get_web().get_lists().getByTitle(CONFIG.calendarListTitle);
+              const calItem = calList.getItemById(calendarItemId);
+              calItem.deleteObject();
+              ctx.executeQueryAsync(function(){ succ(true); }, function(s2,a2){ fail(a2.get_message ? a2.get_message() : a2); });
+            }catch(e){ fail(e); }
+          });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  function updateCalendarItemStatusJSOM(itemId, newStatus){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          if(newStatus === 'Cancelled' || newStatus === 'Rejected'){
+            deleteCalendarAndLinkedBlocks(itemId).then(()=>{ succ(true); }).catch(err=>{ fail(err); });
+            return;
+          }
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(CONFIG.calendarListTitle);
+          const it = list.getItemById(itemId);
+          it.set_item('Status', newStatus);
+          it.update();
+          ctx.executeQueryAsync(function(){
+            const q = new SP.CamlQuery(); q.set_viewXml("<View><Query><Where><Eq><FieldRef Name='ID' /><Value Type='Counter'>"+itemId+"</Value></Eq></Where></Query><RowLimit>1</RowLimit></View>");
+            const items = list.getItems(q); ctx.load(items);
+            ctx.executeQueryAsync(function(){
+              const en = items.getEnumerator();
+              if(en.moveNext()){
+                const itm = en.get_current();
+                const requester = itm.get_item('Requester');
+                const title = itm.get_item('Title')||'';
+                if(requester && requester.get_lookupId){
+                  const uid = requester.get_lookupId();
+                  const user = ctx.get_web().get_siteUsers().getById(uid);
+                  ctx.load(user);
+                  ctx.executeQueryAsync(function(){
+                    const mail = user.get_email();
+                    const link = (typeof _spPageContextInfo !== 'undefined' && _spPageContextInfo.webAbsoluteUrl ? _spPageContextInfo.webAbsoluteUrl : '') + '/Lists/' + encodeURIComponent(CONFIG.calendarListTitle) + '/AllItems.aspx';
+                    const body = CONFIG.mailTemplateStatusChange.replace('{{requester}}', user.get_title()).replace('{{title}}', title).replace('{{status}}', newStatus).replace('{{link}}', link);
+                    if(mail) sendEmail([mail], `Status Ihrer Raum-Anfrage: ${newStatus}`, body).catch(()=>{});
+                    succ(true);
+                  }, function(){ succ(true); });
+                } else succ(true);
+              } else succ(true);
+            }, function(){ succ(true); });
+          }, function(s,a){ fail(a.get_message); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  function sendEmail(toArray, subject, body){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(() => {
+        try {
+          const ctx = SP.ClientContext.get_current();
+          const props = new SP.Utilities.EmailProperties();
+          props.set_to(toArray || []);
+          props.set_subject(subject || '');
+          props.set_body(body || '');
+          SP.Utilities.Utility.sendEmail(ctx, props);
+          ctx.executeQueryAsync(function(){ succ(true); }, function(sender, args){ try { fail(args.get_message()); } catch(e) { fail(args); } });
+        } catch(e){ fail(e); }
+      });
+    });
+  }
+
+  /* ---------- UI: initCalendar (must exist before boot) ---------- */
+  function initCalendar(){
+    if(calendar) calendar.destroy();
+    const Calendar = (window.FullCalendar && window.FullCalendar.Calendar) ? window.FullCalendar.Calendar : null;
+    if(!Calendar){
+      console.warn('FullCalendar not available yet');
+      return;
+    }
+    const minMinutes = timeStringToMinutes(CONFIG.requestWindowStart) ?? 0;
+    const maxMinutes = timeStringToMinutes(CONFIG.requestWindowEnd) ?? 24*60;
+    const slotMinTime = minutesToTimeString(minMinutes);
+    const slotMaxTime = minutesToTimeString(maxMinutes);
+
+    calendar = new Calendar(document.getElementById('calendar'), {
+      initialView: CONFIG.defaultView,
+      locale: CONFIG.locale,
+      headerToolbar: { left:'prev,next today', center:'title', right:'timeGridWeek,dayGridMonth,listYear' },
+      firstDay:1,
+      slotDuration: `00:${String(CONFIG.timeSlotMinutes).padStart(2,'0')}:00`,
+      selectable:true,
+      selectMirror:true,
+      slotMinTime: slotMinTime,
+      slotMaxTime: slotMaxTime,
+      select:function(selectionInfo){ openRequestModal({ start: selectionInfo.startStr, end: selectionInfo.endStr }); },
+      eventClick:function(info){ openEventDetailsModal(info.event); },
+      events:function(fetchInfo, successCallback){
+        loadEvents(fetchInfo.startStr, fetchInfo.endStr).then(events=>{
+          successCallback(events);
+        }).catch(err=>{ console.warn(err); successCallback([]); });
+      },
+      dayMaxEvents:true,
+      height:'auto',
+      eventDisplay:'block'
+    });
+    calendar.render();
+  }
+
+  /* ---------- UI: Request Modal ---------- */
+  function openRequestModal(opts){
+    const start = opts.start ? new Date(opts.start) : new Date();
+    const end = opts.end ? new Date(opts.end) : new Date(start.getTime() + CONFIG.timeSlotMinutes*60000);
+    const roomOptions = rooms.length ? rooms.map(r=>`<option value="${r.id}">${escapeHtml(r.title)}</option>`).join('') : '<option value="">-- Keine Räume --</option>';
+
+    const recurHtml = `
+      <div style="border:1px solid #eee;padding:8px;border-radius:8px">
+        <label style="font-weight:600">Serienmuster</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <select id="req-recur-freq">
+            <option value="none">Keine</option>
+            <option value="daily">Täglich</option>
+            <option value="weekly">Wöchentlich</option>
+            <option value="monthly">Monatlich</option>
+            <option value="yearly">Jährlich</option>
+          </select>
+          <label class="small-muted">Intervall</label>
+          <input type="number" id="req-recur-interval" min="1" value="1" style="width:80px" />
+        </div>
+
+        <div id="recur-weekdays" style="display:none;margin-bottom:8px">
+          <label class="small-muted">Wochentage</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <label><input type="checkbox" value="su" /> So</label>
+            <label><input type="checkbox" value="mo" checked /> Mo</label>
+            <label><input type="checkbox" value="tu" /> Di</label>
+            <label><input type="checkbox" value="we" /> Mi</label>
+            <label><input type="checkbox" value="th" /> Do</label>
+            <label><input type="checkbox" value="fr" /> Fr</label>
+            <label><input type="checkbox" value="sa" /> Sa</label>
+          </div>
+        </div>
+
+        <div id="recur-monthly-options" style="display:none;margin-bottom:8px">
+          <label class="small-muted">Monatliche Option</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <label><input type="radio" name="monthlyOpt" value="day" checked /> Tag <input type="number" id="monthly-day" min="1" max="31" value="${start.getDate()}" style="width:80px;margin-left:6px"/></label>
+            <label><input type="radio" name="monthlyOpt" value="weekday" /> Muster <select id="monthly-week-index"><option value="1">1.</option><option value="2">2.</option><option value="3">3.</option><option value="4">4.</option><option value="-1">letzte</option></select> <select id="monthly-week-day"><option value="su">So</option><option value="mo" selected>Mo</option><option value="tu">Di</option><option value="we">Mi</option><option value="th">Do</option><option value="fr">Fr</option><option value="sa">Sa</option></select></label>
+          </div>
+        </div>
+
+        <div id="recur-yearly-options" style="display:none;margin-bottom:8px">
+          <label class="small-muted">Jährliche Option</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <label><input type="radio" name="yearlyOpt" value="date" checked /> Datum <input type="number" id="yearly-day" min="1" max="31" value="${start.getDate()}" style="width:80px;margin-left:6px"/> <input type="number" id="yearly-month" min="1" max="12" value="${start.getMonth()+1}" style="width:80px;margin-left:6px"/></label>
+            <label><input type="radio" name="yearlyOpt" value="weekday" /> Muster <select id="yearly-week-index"><option value="1">1.</option><option value="2">2.</option><option value="3">3.</option><option value="4">4.</option><option value="-1">letzte</option></select> <select id="yearly-week-day"><option value="su">So</option><option value="mo" selected>Mo</option><option value="tu">Di</option><option value="we">Mi</option><option value="th">Do</option><option value="fr">Fr</option><option value="sa">Sa</option></select> Monat <input type="number" id="yearly-week-month" min="1" max="12" value="${start.getMonth()+1}" style="width:80px;margin-left:6px"/></label>
+          </div>
+        </div>
+
+        <div style="margin-top:8px">
+          <label class="small-muted">Ende</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <label><input type="radio" name="endType" value="never" checked /> Nie</label>
+            <label><input type="radio" name="endType" value="after" /> Nach <input type="number" id="end-after-count" min="1" value="5" style="width:80px;margin-left:6px"/> Vorkommnissen</label>
+            <label><input type="radio" name="endType" value="until" /> Am/Datum <input type="date" id="end-until-date" value="${start.toISOString().slice(0,10)}" style="margin-left:6px" /></label>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const html = `<div class="modal" role="dialog" aria-modal="true">
+      <h2>Raum beantragen</h2>
+
+      <div class="form-row"><div class="col"><label>Raum</label><select id="req-room">${roomOptions}</select></div><div class="col"><label>Ausleihender</label><input type="text" id="req-requester" value="${escapeHtml(currentUser.title)}" /></div></div>
+
+      <div class="form-row"><div class="col"><label>Verwendungszweck</label><input type="text" id="req-purpose" placeholder="z.B. Besprechung" /></div></div>
+
+      <div class="form-row"><div class="col"><label>Beginn</label><input type="datetime-local" id="req-start" value="${toLocalDateTimeString(start)}" /></div><div class="col"><label>Ende</label><input type="datetime-local" id="req-end" value="${toLocalDateTimeString(end)}" /></div></div>
+
+      <div class="form-row"><div class="col">${recurHtml}</div></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button id="req-cancel" class="btn secondary">Abbrechen</button>
+        <button id="req-submit" class="btn">Anfragen</button>
+      </div>
+    </div>`;
+
+    showModal(html);
+
+    $("#req-recur-freq").on('change', function(){
+      const v = $(this).val();
+      $("#recur-weekdays").hide();
+      $("#recur-monthly-options").hide();
+      $("#recur-yearly-options").hide();
+      if(v === 'weekly') $("#recur-weekdays").show();
+      if(v === 'monthly') $("#recur-monthly-options").show();
+      if(v === 'yearly') $("#recur-yearly-options").show();
+    });
+
+    $("#req-cancel").on('click', closeModal);
+
+    $("#req-submit").on('click', function(){
+      const roomId = $("#req-room").val();
+      const purpose = $("#req-purpose").val();
+      const startStr = $("#req-start").val(), endStr = $("#req-end").val();
+      if(!roomId){ alert("Bitte Raum auswählen."); return; }
+      const s = new Date(startStr), e = new Date(endStr);
+      if(isNaN(s) || isNaN(e) || e <= s){ alert("Ungültiger Zeitraum."); return; }
+
+      const windowStartMin = timeStringToMinutes(CONFIG.requestWindowStart);
+      const windowEndMin = timeStringToMinutes(CONFIG.requestWindowEnd);
+      function checkWithinWindow(dtStart, dtEnd){
+        const minsStart = dtStart.getHours()*60 + dtStart.getMinutes();
+        const minsEnd = dtEnd.getHours()*60 + dtEnd.getMinutes();
+        return (minsStart >= windowStartMin && minsEnd <= windowEndMin);
+      }
+
+      const freq = $("#req-recur-freq").val();
+      const interval = parseInt($("#req-recur-interval").val()||"1",10) || 1;
+      const room = rooms.find(r=>String(r.id)===String(roomId));
+      const roomTitle = room ? room.title : '';
+
+      if(freq && freq !== 'none'){
+        const pattern = {
+          freq: freq,
+          interval: interval,
+          start: s.toISOString(),
+          end: e.toISOString(),
+          purpose: purpose,
+          location: roomTitle,
+          blockToken: 'BT_'+Date.now()+'_'+Math.floor(Math.random()*10000),
+          endType: 'never'
+        };
+        if(freq === 'weekly'){
+          const weekdays = [];
+          $("#recur-weekdays input[type=checkbox]").each(function(){ if(this.checked) weekdays.push($(this).val()); });
+          pattern.weekdays = weekdays.length ? weekdays : ['mo'];
+        }
+        if(freq === 'monthly'){
+          const opt = $('input[name=monthlyOpt]:checked').val();
+          pattern.monthlyOption = opt;
+          if(opt === 'day') pattern.day = parseInt($("#monthly-day").val() || s.getDate(),10);
+          else pattern.weekday = { weekIndex: parseInt($("#monthly-week-index").val(),10), day: $("#monthly-week-day").val() };
+        }
+        if(freq === 'yearly'){
+          const opt = $('input[name=yearlyOpt]:checked').val();
+          pattern.monthlyOption = (opt === 'date') ? 'day' : 'weekday';
+          if(opt === 'date'){ pattern.day = parseInt($("#yearly-day").val()||s.getDate(),10); pattern.month = parseInt($("#yearly-month").val()|| (s.getMonth()+1),10); }
+          else { pattern.weekday = { weekIndex: parseInt($("#yearly-week-index").val(),10), day: $("#yearly-week-day").val() }; pattern.month = parseInt($("#yearly-week-month").val() || (s.getMonth()+1),10); }
+        }
+        const endType = $('input[name=endType]:checked').val();
+        pattern.endType = endType;
+        if(endType === 'after') pattern.count = parseInt($("#end-after-count").val()||5,10);
+        else if(endType === 'until') pattern.until = $("#end-until-date").val();
+
+        const expanded = expandRecurrence(pattern);
+        const invalid = expanded.some(occ => !checkWithinWindow(new Date(occ.start), new Date(occ.end)));
+        if(invalid){ alert("Mindestens ein Termin der Serie liegt außerhalb des konfigurierten Beantragungszeitfensters."); return; }
+
+        createSeriesInCalendarAndBlocks(pattern).then(()=>{ closeModal(); calendar.refetchEvents(); }).catch(err=>{
+          const msg = (typeof err === 'string') ? err : JSON.stringify(err);
+          alert("Fehler beim Anlegen der Serie: " + msg);
+        });
+      } else {
+        if(!checkWithinWindow(s, e)){ alert("Der angefragte Zeitraum liegt außerhalb des konfigurierten Beantragungszeitfensters."); return; }
+        const occurrences = [{ start: s, end: e }];
+        createSingleItemsAndBlocks(occurrences, roomTitle, purpose).then(()=>{ closeModal(); calendar.refetchEvents(); }).catch(err=>{ alert("Fehler beim Anlegen: "+ err); });
+      }
+    });
+  }
+
+  /* ---------- UI: Event details modal ---------- */
+  function openEventDetailsModal(fcEvent){
+    const ext = fcEvent.extendedProps || {};
+    const isOwner = ext.requester && ext.requester === currentUser.title;
+    const isAdmin = currentUser.isAdmin;
+    let html = `<div class="modal" role="dialog" aria-modal="true"><h2>${escapeHtml(fcEvent.title)}</h2>`;
+    html += `<div class="muted-small">Raum: ${escapeHtml(ext.location||'')}</div>`;
+    html += `<div class="muted-small">Zeitraum: ${new Date(fcEvent.start).toLocaleString()} - ${new Date(fcEvent.end).toLocaleString()}</div>`;
+    if(ext.usePurpose) html += `<div class="muted-small">Verwendungszweck: ${escapeHtml(ext.usePurpose)}</div>`;
+    if(ext.status) html += `<div class="muted-small">Status: ${escapeHtml(ext.status)}</div>`;
+    if(ext.recurrencePatternJson){
+      try{
+        const pat = JSON.parse(ext.recurrencePatternJson);
+        html += `<div class="muted-small">Serie: ${escapeHtml(pat.freq)} (Intervall ${pat.interval || 1})</div>`;
+      }catch(e){}
+    }
+    html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button id="evt-close" class="btn secondary">Schließen</button>`;
+    if(isOwner && ext.status !== 'Cancelled' && ext.status !== 'Rejected') html += `<button id="evt-cancel" class="btn danger">Stornieren</button>`;
+    if(isAdmin){
+      if(ext.status === 'Pending') html += `<button id="evt-approve" class="btn success">Genehmigen</button><button id="evt-reject" class="btn danger">Ablehnen</button>`;
+      else if(ext.status === 'Approved') html += `<button id="evt-cancel-admin" class="btn danger">Stornieren</button>`;
+    }
+    html += `</div></div>`;
+    showModal(html);
+    $("#evt-close").on('click', closeModal);
+    if($("#evt-cancel").length) $("#evt-cancel").on('click', ()=> updateCalendarItemStatusJSOM(ext.spItemId, 'Cancelled').then(()=>{ closeModal(); calendar.refetchEvents(); }));
+    if($("#evt-cancel-admin").length) $("#evt-cancel-admin").on('click', ()=> updateCalendarItemStatusJSOM(ext.spItemId, 'Cancelled').then(()=>{ closeModal(); calendar.refetchEvents(); }));
+    if($("#evt-approve").length) $("#evt-approve").on('click', ()=> updateCalendarItemStatusJSOM(ext.spItemId, 'Approved').then(()=>{ closeModal(); calendar.refetchEvents(); }));
+    if($("#evt-reject").length) $("#evt-reject").on('click', ()=> updateCalendarItemStatusJSOM(ext.spItemId, 'Rejected').then(()=>{ closeModal(); calendar.refetchEvents(); }));
+  }
+
+  /* ---------- UI: Config modal ---------- */
+  function openConfigModal(){
+    checkAdminsAndMembership().then(info=>{
+      if(!currentUser.isAdmin && info.exists && !info.isMember){ alert("Nur Admins können die Konfiguration öffnen."); return; }
+
+      loadConfigItem().then(()=> {
+        const createBtnLabel = "Listen Updaten";
+        const html = `
+          <div class="modal" role="dialog" aria-modal="true">
+            <h2>Administration / Konfiguration</h2>
+            <div class="form-row"><div class="col"><label>Mail-Adresse für Anfragen</label><input type="text" id="cfg-mail" value="${escapeHtml(CONFIG.mailNotifyAddress)}" /></div></div>
+
+            <div class="form-row"><div class="col"><label>Mail-Vorlage: Neue Anfrage (HTML)</label><div class="html-editor-toolbar" id="toolbar-new"><button data-cmd="bold"><b>B</b></button><button data-cmd="italic"><i>I</i></button><button data-cmd="underline"><u>U</u></button><button data-cmd="createLink">Link</button><button data-cmd="removeFormat">Clear</button></div><div id="editor-new" class="html-editor" contenteditable="true"></div></div></div>
+
+            <div class="form-row"><div class="col"><label>Kalender Liste Name</label><input type="text" id="cfg-calname" value="${escapeHtml(CONFIG.calendarListTitle)}" /></div></div>
+            <div class="form-row"><div class="col"><label>Räume Liste Name</label><input type="text" id="cfg-roomsname" value="${escapeHtml(CONFIG.roomsListTitle)}" /></div></div>
+            <div class="form-row"><div class="col"><label>Admins-Liste Name</label><input type="text" id="cfg-adminslist" value="${escapeHtml(CONFIG.adminsListTitle)}" /></div></div>
+
+            <div class="form-row"><div class="col"><label>Beantragungszeitfenster (Uhrzeit)</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="time" id="cfg-window-start" value="${escapeHtml(CONFIG.requestWindowStart)}" style="width:140px" />
+                <span class="small-muted">bis</span>
+                <input type="time" id="cfg-window-end" value="${escapeHtml(CONFIG.requestWindowEnd)}" style="width:140px" />
+                <div class="small-muted" style="margin-left:8px">Kalenderansicht und Validierung der Anfragen</div>
+              </div>
+            </div></div>
+
+            <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px">
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="cfg-admins-link" class="btn secondary">Admins</button>
+                <button id="cfg-outlook-link" class="btn secondary">In Outlook</button>
+              </div>
+
+              <div style="display:flex;gap:8px">
+                <button id="cfg-create-lists" class="btn">${createBtnLabel}</button>
+                <button id="cfg-save" class="btn">Speichern</button>
+                <button id="cfg-cancel" class="btn secondary">Schließen</button>
+              </div>
+            </div>
+
+            <div id="cfg-msg" class="cfg-msg"></div>
+          </div>
+        `;
+        showModal(html);
+
+        $("#editor-new").html(CONFIG.mailTemplateNewRequest);
+
+        function setupToolbar(toolbarId, editorId){
+          $(`#${toolbarId} button`).on('click', function(){
+            const cmd = $(this).attr('data-cmd');
+            if(cmd === 'createLink'){
+              const url = prompt('Link-URL eingeben');
+              if(url) document.execCommand('createLink', false, url);
+            } else if(cmd === 'removeFormat'){
+              document.execCommand('removeFormat', false, null);
+            } else {
+              document.execCommand(cmd, false, null);
+            }
+            $(`#${editorId}`).focus();
+          });
+        }
+        setupToolbar('toolbar-new','editor-new');
+
+        $("#cfg-admins-link").on('click', function(e){
+          e.preventDefault();
+          const listName = $("#cfg-adminslist").val() || CONFIG.adminsListTitle;
+          const webUrl = webAbsoluteUrl();
+          const url = webUrl + '/Lists/' + encodeURIComponent(listName) + '/AllItems.aspx';
+          window.open(url, "_blank");
+        });
+
+        $("#cfg-outlook-link").on('click', function(e){
+          e.preventDefault();
+          const calListName = $("#cfg-calname").val() || CONFIG.calendarListTitle;
+          ensureJSOM(() => {
+            try {
+              const ctx = SP.ClientContext.get_current();
+              const web = ctx.get_web();
+              const lists = web.get_lists();
+              const list = lists.getByTitle(calListName);
+              ctx.load(list, 'Id', 'Title', 'RootFolder');
+              ctx.load(list.get_rootFolder());
+              ctx.executeQueryAsync(function(){
+                const listId = list.get_id().toString();
+                let guid = listId;
+                if(guid.indexOf('{') !== 0) guid = '{' + guid + '}';
+                const listRootUrl = list.get_rootFolder().get_serverRelativeUrl ? list.get_rootFolder().get_serverRelativeUrl() : '';
+                const baseUrl = webAbsoluteUrl();
+                const siteName = encodeURIComponent(document.title || 'SharePoint-Site');
+                const listNameEnc = encodeURIComponent(list.get_title ? list.get_title() : calListName);
+                const full = "stssync://sts/"
+                  + "?ver=1.0"
+                  + "&type=calendar"
+                  + "&cmd=add-folder"
+                  + "&base-url=" + encodeURIComponent(baseUrl)
+                  + "&guid=" + encodeURIComponent(guid)
+                  + "&site-name=" + siteName
+                  + "&list-name=" + listNameEnc
+                  + "&list-url=" + encodeURIComponent(listRootUrl)
+                  + "&user-id=";
+                window.location.href = full;
+              }, function(){
+                alert('Konnte Liste für Outlook nicht lesen.');
+              });
+            } catch(e){
+              alert('Fehler beim Erzeugen Outlook-Link: ' + (e && e.message ? e.message : e));
+            }
+          });
+        });
+
+        $("#cfg-create-lists").on('click', function(){
+          $("#cfg-msg").text("Listen werden aktualisiert...");
+          CONFIG.calendarListTitle = $("#cfg-calname").val() || CONFIG.calendarListTitle;
+          CONFIG.roomsListTitle = $("#cfg-roomsname").val() || CONFIG.roomsListTitle;
+          CONFIG.adminsListTitle = $("#cfg-adminslist").val() || CONFIG.adminsListTitle;
+          createOrUpdateAllListsJSOM(true).then(results=>{
+            let summary = '';
+            if(Array.isArray(results)){
+              results.forEach(r => {
+                const fieldSummary = r.fields ? JSON.stringify(r.fields) : (r.fieldsError?JSON.stringify(r.fieldsError):'');
+                summary += `${r.list}: ${r.created ? 'erstellt' : 'vorhanden'} — Felder: ${fieldSummary}\n`;
+              });
+            } else summary = JSON.stringify(results);
+            $("#cfg-msg").text("Update abgeschlossen.\n" + summary);
+            loadRooms().then(r=>{ rooms = r; renderRooms(); if(calendar) calendar.refetchEvents(); });
+          }).catch(err=>{
+            const msg = (typeof err === 'string') ? err : (err && err.message) ? err.message : JSON.stringify(err);
+            $("#cfg-msg").text("Fehler beim Updaten der Listen: " + msg);
+            alert("Fehler beim Updaten der Listen: " + msg);
+          });
+        });
+
+        $("#cfg-save").on('click', function(){
+          CONFIG.calendarListTitle = $("#cfg-calname").val() || CONFIG.calendarListTitle;
+          CONFIG.roomsListTitle = $("#cfg-roomsname").val() || CONFIG.roomsListTitle;
+          CONFIG.adminsListTitle = $("#cfg-adminslist").val() || CONFIG.adminsListTitle;
+          CONFIG.mailNotifyAddress = $("#cfg-mail").val() || CONFIG.mailNotifyAddress;
+          CONFIG.mailTemplateNewRequest = $("#editor-new").html() || CONFIG.mailTemplateNewRequest;
+          const ws = $("#cfg-window-start").val() || CONFIG.requestWindowStart;
+          const we = $("#cfg-window-end").val() || CONFIG.requestWindowEnd;
+          if(timeStringToMinutes(ws) >= timeStringToMinutes(we)){ alert("Startzeit des Beantragungsfensters muss vor der Endzeit liegen."); return; }
+          CONFIG.requestWindowStart = ws;
+          CONFIG.requestWindowEnd = we;
+
+          $("#cfg-msg").text("Speichern läuft...");
+          ensureListAndFields(CONFIG.configListTitle, 100, [
+            { internalName:'MailNotify', fieldXml: "<Field DisplayName='MailNotify' Type='Text' StaticName='MailNotify' Name='MailNotify' />" },
+            { internalName:'MailTemplate_NewRequest', fieldXml: "<Field DisplayName='MailTemplate_NewRequest' Type='Note' StaticName='MailTemplate_NewRequest' Name='MailTemplate_NewRequest' />" },
+            { internalName:'MailTemplate_StatusChange', fieldXml: "<Field DisplayName='MailTemplate_StatusChange' Type='Note' StaticName='MailTemplate_StatusChange' Name='MailTemplate_StatusChange' />" },
+            { internalName:'RequestWindowStart', fieldXml: "<Field DisplayName='RequestWindowStart' Type='Text' StaticName='RequestWindowStart' Name='RequestWindowStart' />" },
+            { internalName:'RequestWindowEnd', fieldXml: "<Field DisplayName='RequestWindowEnd' Type='Text' StaticName='RequestWindowEnd' Name='RequestWindowEnd' />" }
+          ]).then(()=>{
+            return saveConfigItem({
+              MailNotify: CONFIG.mailNotifyAddress,
+              MailTemplate_NewRequest: CONFIG.mailTemplateNewRequest,
+              MailTemplate_StatusChange: CONFIG.mailTemplateStatusChange,
+              RequestWindowStart: CONFIG.requestWindowStart,
+              RequestWindowEnd: CONFIG.requestWindowEnd
+            });
+          }).then(res=>{
+            $("#cfg-msg").text("Konfiguration gespeichert.");
+            setTimeout(()=>{ closeModal(); initCalendar(); }, 600);
+          }).catch(err=>{
+            let msg = (typeof err === 'string') ? err : (err && err.message) ? err.message : JSON.stringify(err);
+            $("#cfg-msg").text("Fehler beim Speichern: " + msg);
+            alert("Fehler beim Speichern: " + msg);
+          });
+        });
+
+        $("#cfg-cancel").on('click', closeModal);
+      }).catch(err=>{ alert("Fehler beim Laden der Konfiguration: " + JSON.stringify(err)); });
+    }).catch(err=>{ alert("Fehler beim Prüfen der Admins-Liste: " + JSON.stringify(err)); });
+  }
+
+  /* ---------- Open Requests (admin) ---------- */
+  function loadOpenRequests(){
+    return jsomExec((succ, fail) => {
+      ensureJSOM(()=>{
+        try{
+          const ctx = SP.ClientContext.get_current();
+          const list = ctx.get_web().get_lists().getByTitle(CONFIG.calendarListTitle);
+          const caml = new SP.CamlQuery();
+          caml.set_viewXml("<View><Query><Where><Eq><FieldRef Name='Status' /><Value Type='Text'>Pending</Value></Eq></Where></Query><RowLimit>500</RowLimit></View>");
+          const items = list.getItems(caml);
+          ctx.load(items, 'Include(Id, Title, EventDate, EndDate, Location, Requester, UsePurpose, fRecurrence, RecurrencePatternJson)');
+          ctx.executeQueryAsync(function(){
+            const arr = []; const en = items.getEnumerator();
+            while(en.moveNext()){
+              const it = en.get_current();
+              const requester = it.get_item('Requester');
+              arr.push({
+                id: it.get_id(),
+                title: it.get_item('Title') || '',
+                start: it.get_item('EventDate'),
+                end: it.get_item('EndDate'),
+                location: it.get_item('Location') || '',
+                requesterName: requester ? requester.get_lookupValue() : '',
+                usePurpose: it.get_item('UsePurpose') || '',
+                isRecurrenceMaster: !!it.get_item('fRecurrence'),
+                recurrencePatternJson: it.get_item('RecurrencePatternJson') || null
+              });
+            }
+            succ(arr);
+          }, function(s,a){ fail(a.get_message ? a.get_message() : a); });
+        }catch(e){ fail(e); }
+      });
+    });
+  }
+
+  function openOpenRequestsDialog(){
+    loadOpenRequests().then(list=>{
+      let html = `<div class="modal" role="dialog" aria-modal="true" style="max-width:1100px"><h2>Offene Anfragen (${list.length})</h2>`;
+      html += `<div style="max-height:60vh;overflow:auto">`;
+      html += `<table class="admin-requests"><thead><tr><th>#</th><th>Titel</th><th>Raum</th><th>Zeitraum</th><th>Anfragender</th><th>Verwendungszweck</th><th>Serie</th><th>Aktion</th></tr></thead><tbody>`;
+      list.forEach((it, idx) => {
+        const period = `${new Date(it.start).toLocaleString()} — ${new Date(it.end).toLocaleString()}`;
+        const seriesLabel = it.isRecurrenceMaster ? 'Master' : '';
+        html += `<tr data-id="${it.id}"><td>${idx+1}</td><td>${escapeHtml(it.title)}</td><td>${escapeHtml(it.location)}</td><td>${escapeHtml(period)}</td><td>${escapeHtml(it.requesterName)}</td><td>${escapeHtml(it.usePurpose)}</td><td>${escapeHtml(seriesLabel)}</td><td class="actions">
+          <button class="btn success btn-accept" data-id="${it.id}">Annehmen</button>
+          <button class="btn secondary btn-cancel" data-id="${it.id}">Stornieren</button>
+          <button class="btn danger btn-delete" data-id="${it.id}">Löschen</button>
+        </td></tr>`;
+      });
+      html += `</tbody></table></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button id="openreq-close" class="btn secondary">Schließen</button></div></div>`;
+      showModal(html);
+
+      $("#openreq-close").on('click', closeModal);
+
+      $(".btn-accept").on('click', function(e){
+        const id = $(this).attr('data-id');
+        if(!confirm("Diese Anfrage genehmigen?")) return;
+        $(this).prop('disabled', true).text('...').siblings().prop('disabled', true);
+        updateCalendarItemStatusJSOM(id, 'Approved').then(()=> {
+          calendar.refetchEvents();
+          openOpenRequestsDialog();
+        }).catch(err=>{
+          alert("Fehler beim Genehmigen: " + JSON.stringify(err));
+          $(this).prop('disabled', false).text('Annehmen').siblings().prop('disabled', false);
+        });
+      });
+
+      $(".btn-cancel").on('click', function(e){
+        const id = $(this).attr('data-id');
+        if(!confirm("Diese Anfrage stornieren? (Einträge werden gelöscht)")) return;
+        $(this).prop('disabled', true).text('...');
+        updateCalendarItemStatusJSOM(id, 'Cancelled').then(()=>{
+          calendar.refetchEvents();
+          openOpenRequestsDialog();
+        }).catch(err=>{
+          alert("Fehler beim Stornieren: " + JSON.stringify(err));
+          $(this).prop('disabled', false).text('Stornieren');
+        });
+      });
+
+      $(".btn-delete").on('click', function(e){
+        const id = $(this).attr('data-id');
+        if(!confirm("Diesen Eintrag löschen? (Master und verknüpfte Blockeinträge werden entfernt)")) return;
+        $(this).prop('disabled', true).text('...');
+        deleteCalendarAndLinkedBlocks(id).then(()=>{
+          calendar.refetchEvents();
+          openOpenRequestsDialog();
+        }).catch(err=>{
+          alert("Fehler beim Löschen: " + JSON.stringify(err));
+          $(this).prop('disabled', false).text('Löschen');
+        });
+      });
+
+    }).catch(err=>{
+      alert("Fehler beim Laden offener Anfragen: " + JSON.stringify(err));
+    });
+  }
+
+  /* ---------- renderRooms ---------- */
+  function renderRooms(){
+    const $ul = $("#roomList"); $ul.empty();
+    if(!rooms || rooms.length === 0){ $ul.append('<li class="muted-small">Keine Räume konfiguriert.</li>'); return; }
+    rooms.forEach(r => {
+      $ul.append(`<li><div style="display:flex;align-items:center"><span style="width:12px;height:12px;border-radius:3px;margin-right:8px;background:${r.color}"></span><strong>${escapeHtml(r.title)}</strong><div style="margin-left:8px" class="muted-small">${escapeHtml(r.location)}</div></div><div><small class="muted-small">${r.id}</small></div></li>`);
+    });
+    $("#sp-user").text(currentUser.title + (currentUser.isAdmin ? " (Admin)" : ""));
+    if(currentUser.isAdmin) $("#admin-indicator").html('<span style="background:#222;color:#fff;padding:4px 8px;border-radius:6px;font-size:12px">Admin</span>'); else $("#admin-indicator").empty();
+  }
+
+  /* ---------- Boot sequence ---------- */
+  $(document).ready(function(){
+    fastInitUserFromPageContext();
+    initCalendar();
+
+    $("#btn-new").on('click', ()=> { if(typeof openRequestModal === 'function') openRequestModal({}); else alert('Bitte kurz warten…'); });
+    $("#btn-config").on('click', ()=> { if(typeof openConfigModal === 'function') openConfigModal(); else alert('Bitte kurz warten…'); });
+    $("#btn-open-requests").on('click', ()=> { if(typeof openOpenRequestsDialog === 'function') openOpenRequestsDialog(); else alert('Bitte kurz warten…'); });
+
+    (async function asyncInit(){
+      try{
+        await loadCurrentUser().catch(()=>{});
+        await loadUserGroups().catch(()=>{});
+        const adminInfo = await checkAdminsAndMembership().catch(()=>({ exists:false, isMember:false }));
+        if(adminInfo && adminInfo.exists === false){
+          $("#btn-config").show();
+          setTimeout(()=>{ openConfigModal(); }, 200);
+          await createOrUpdateAllListsJSOM(true).catch(e=>console.warn('create lists failed', e));
+          await loadConfigItem().catch(()=>{});
+          rooms = await loadRooms().catch(()=>[]);
+          renderRooms();
+          if(calendar) calendar.refetchEvents && calendar.refetchEvents();
+          return;
+        }
+        if(adminInfo.isMember) currentUser.isAdmin = true;
+        if(currentUser.isAdmin){
+          $("#btn-config").show();
+          $("#btn-open-requests").show();
+        }
+        await createOrUpdateAllListsJSOM(true).catch(e=>{ const msg=(typeof e==='string')?e:(e&&e.message)?e.message:JSON.stringify(e); alert('Fehler beim Updaten der Listen: '+msg); console.warn('createOrUpdateAllListsJSOM failed', e); });
+        await loadConfigItem().catch(()=>{});
+        rooms = await loadRooms().catch(()=>[]);
+        renderRooms();
+        if(calendar) calendar.refetchEvents && calendar.refetchEvents();
+      }catch(e){
+        console.warn('asyncInit error', e);
+      }
+    })();
+  });
+
+  /* ---------- expose API ---------- */
+  global.SP_Raum = {
+    config: CONFIG,
+    currentUser: () => currentUser,
+    ensureLists: createOrUpdateAllListsJSOM,
+    expandRecurrence,
+    buildRecurrenceDataXML,
+    reload: function(){ loadRooms().then(r=>{ rooms=r; renderRooms(); if(calendar) calendar.refetchEvents(); }); }
+  };
+
+  // also export some core functions to window for debugging / external calls
+  global.createOrUpdateAllListsJSOM = createOrUpdateAllListsJSOM;
+  global.createSeriesInCalendarAndBlocks = createSeriesInCalendarAndBlocks;
+  global.createSingleItemsAndBlocks = createSingleItemsAndBlocks;
+  global.initCalendar = initCalendar;
+  global.openConfigModal = openConfigModal;
+  global.openRequestModal = openRequestModal;
+  global.openOpenRequestsDialog = openOpenRequestsDialog;
+
+})(window, jQuery);
+</script>
+</body>
+</html>

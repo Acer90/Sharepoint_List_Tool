@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SP List Viewer</title>
+
+  <style>
+    :root{
+      --berry: #b41069;
+      --muted: #6b6b6b;
+      --card: #f8f9fa;
+      --radius: 8px;
+    }
+
+    /* Scoped container */
+    #spv-container {
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      color: #222;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+      z-index: 0;
+    }
+
+    .spv-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .spv-header { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+    .spv-title { font-size:18px; font-weight:600; color: var(--berry); }
+    .spv-controls { margin-left:auto; display:flex; gap:8px; align-items:center; }
+    .spv-input { padding:8px 10px; border-radius:6px; border:1px solid #e2e2e6; min-width:220px; background:#fff; }
+    .spv-select { padding:8px 10px; border-radius:6px; border:1px solid #e2e2e6; background:#fff; }
+    .spv-table-wrap { overflow:auto; border-radius:6px; background:#fff; border:1px solid #e9e9eb; }
+    table.spv-table { width:100%; border-collapse:collapse; min-width:720px; table-layout: auto; }
+    table.spv-table th, table.spv-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #f1f1f3; vertical-align:top; box-sizing: border-box; white-space: pre-line; }
+    table.spv-table thead th { position:sticky; top:0; background:linear-gradient(180deg,#fff,#fbfbfc); z-index:3; user-select:none; }
+    th.spv-sortable { cursor: pointer; }
+    th.spv-sortable .spv-header-main { display:flex; align-items:center; gap:8px; }
+    th.spv-sortable:hover { background: linear-gradient(180deg, rgba(180,16,105,0.03), transparent); }
+    .spv-sort-indicator { display:inline-block; margin-left:4px; color:var(--muted); font-size:12px; padding:4px; border-radius:4px; cursor:pointer; user-select:none; }
+    .spv-sort-indicator:hover { background: rgba(0,0,0,0.02); }
+
+    .spv-group-cell { display: table-cell; width: 100%; box-sizing: border-box; padding: 8px 12px; background: linear-gradient(90deg, rgba(180,16,105,0.06), rgba(180,16,105,0.03)); color: var(--berry); font-weight: 700; border-bottom: 1px solid rgba(180,16,105,0.06); }
+    .spv-group-header { cursor:pointer; display:flex; align-items:center; gap:8px; width:100%; }
+
+    .spv-actions { display:flex; gap:8px; align-items:center; }
+    .spv-btn { border: none; background: var(--berry); color: #fff; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px; }
+    .spv-btn.secondary { background: #fff; color: var(--berry); border:1px solid var(--berry); }
+    .spv-small { font-size:12px; color:var(--muted); }
+    .spv-toast { position: fixed; right: 18px; bottom: 18px; background: #222; color: #fff; padding:12px 16px; border-radius:8px; box-shadow: 0 6px 18px rgba(0,0,0,0.2); opacity:0.95; z-index:9999; font-size:13px; }
+    .spv-footer { margin-top:12px; display:flex; justify-content:space-between; align-items:center; color:var(--muted); }
+
+    .spv-filter-popup { position:absolute; z-index:9998; background:#fff; border:1px solid #e6e6e8; box-shadow:0 6px 20px rgba(0,0,0,0.12); border-radius:8px; padding:8px; min-width:220px; max-height:320px; overflow:auto; }
+    .spv-filter-popup .value { padding:6px; cursor:pointer; border-radius:6px; }
+    .spv-filter-popup .value:hover { background: #f4f4f6; }
+
+    .spv-attachments-list { display:flex; flex-direction:column; gap:6px; }
+    .spv-attachment { font-size:13px; color:var(--berry); text-decoration:none; display:inline-block; }
+
+    .spv-chevron { font-size:12px; color:var(--muted); }
+    @media (max-width:720px) { .spv-controls { flex-direction:column; align-items:stretch; width:100%; } .spv-input { width:100%; min-width:0; } }
+  </style>
+
+</head>
+<body>
+  <div id="spv-container">
+    <div class="spv-card" id="spv-root">
+      <div class="spv-header">
+        <div>
+          <div class="spv-title" id="spv-title">SharePoint Liste</div>
+          <div class="spv-small" id="spv-subtitle">Lade Daten…</div>
+        </div>
+
+        <div class="spv-controls">
+          <input class="spv-input" id="spv-search" placeholder="Suche (alle Felder)" />
+          <select id="spv-group-by" class="spv-select" title="Gruppieren"><option value="">Keine Gruppierung</option></select>
+          <div class="spv-actions">
+            <button class="spv-btn" id="spv-refresh">Aktualisieren</button>
+            <button class="spv-btn secondary" id="spv-toggle-groups" title="Alle Gruppen ein-/ausklappen">Alle einklappen</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="spv-table-wrap" id="spv-table-wrap">
+        <table class="spv-table" id="spv-table" role="table" aria-label="SharePoint Liste">
+          <thead><tr id="spv-thead-row"></tr></thead>
+          <tbody id="spv-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="spv-footer">
+        <div id="spv-status"></div>
+        <div id="spv-count" class="spv-small"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="spv-toast-area"></div>
+
+  <script>
+    // ------------- Defaults & config (loader can set these vars) -------------
+    var SPV = {
+      listGuid: (typeof LIST_GUID !== 'undefined') ? LIST_GUID : "",
+      siteUrl: (typeof LIST_SITE_URL !== 'undefined') ? LIST_SITE_URL : "",
+      listUrl: (typeof LIST_URL !== 'undefined') ? LIST_URL : "",
+      cols: (typeof LIST_COLUMNS !== 'undefined') ? LIST_COLUMNS : [{Field:'Title', Title:'Title'}],
+      filterRaw: (typeof LIST_Filter !== 'undefined') ? LIST_Filter : "",
+      groupingField: (typeof LIST_GROUPING !== 'undefined') ? LIST_GROUPING : "",
+      defaultOrder: (typeof LIST_DEFAULT_ORDER !== 'undefined') ? LIST_DEFAULT_ORDER : {},
+      items: [],
+      attachments: {}, // itemId => [{fileName,url,sizeBytes,type}]
+      currentSort: {field:null, dir:'ASC'},
+      groupCollapsed: {}, // map groupValue => true/false
+      activeFilters: {}
+    };
+
+    // ------------- Host options -------------
+    (function applyHostOptions(){
+      try {
+        if(window.OPTION_FULL_WIDTH){
+          var s = document.createElement('style');
+          s.id = 'spv-option-fullwidth';
+          s.textContent = [
+            '.CanvasZone { max-width: none !important; width: auto !important; }',
+            '.CanvasZone .ms-webpart-zone { max-width: none !important; width: auto !important; }',
+            '.CanvasZoneContainer { max-width: none !important; width: auto !important; }'
+          ].join('\n');
+          document.head.appendChild(s);
+        }
+        if(window.OPTION_REMOVE_SP_SITEHEADER){
+          var s2 = document.createElement('style');
+          s2.id = 'spv-option-hidepageheader';
+          s2.textContent = 'div[class^="pageTitle_"], [class*=" pageTitle_"] { display: none !important; }';
+          document.head.appendChild(s2);
+          try { document.querySelectorAll('div[class^="pageTitle_"]').forEach(function(e){ e.style.display = 'none'; }); } catch(e){}
+        }
+      } catch(e){ console.warn('SPV options error', e); }
+    })();
+
+    // ------------- Utility: toasts -------------
+    function showToast(text, timeout){
+      timeout = timeout || 2500;
+      var el = document.createElement('div');
+      el.className = 'spv-toast';
+      el.textContent = text;
+      document.getElementById('spv-toast-area').appendChild(el);
+      setTimeout(function(){ el.remove(); }, timeout);
+    }
+
+    // ------------- Clipboard helpers (restore legacy CopytoClipboard + store) -------------
+    function storeClipboardValue(value){
+      try {
+        var key = 'SPListViewer_clipboard';
+        var arr = JSON.parse(sessionStorage.getItem(key) || '[]');
+        arr.unshift({value: value, date: (new Date()).toISOString()});
+        if(arr.length>50) arr = arr.slice(0,50);
+        sessionStorage.setItem(key, JSON.stringify(arr));
+      } catch(e){}
+    }
+
+    window.CopytoClipboard = function(el){
+      var text = '';
+      if(typeof el === 'string'){ text = el; }
+      else {
+        if(el && el.nodeType) text = el.textContent || el.innerText || '';
+        else if(el && el.getAttribute) text = el.getAttribute('data-value') || el.textContent || '';
+      }
+      text = (text || '').trim();
+      if(!text){ showToast('Kein Text zum Kopieren gefunden.'); return; }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){
+          storeClipboardValue(text);
+          showToast('Kopiert in Zwischenablage');
+        }, function(){ fallbackCopy(text); });
+      } else fallbackCopy(text);
+
+      function fallbackCopy(t){
+        var ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); storeClipboardValue(t); showToast('Kopiert in Zwischenablage (fallback)'); }
+        catch(e){ showToast('Kopieren nicht möglich'); }
+        ta.remove();
+      }
+    };
+
+    // ------------- Helpers -------------
+    function formatBytes(bytes){
+      if(bytes === null || typeof bytes === 'undefined' || bytes === '') return '';
+      var n = Number(bytes);
+      if(isNaN(n)) return '';
+      var units = ['B','KB','MB','GB','TB'];
+      var i = 0;
+      while(n >= 1024 && i < units.length-1){ n = n / 1024; i++; }
+      var decimals = (i === 0) ? 0 : (n < 10 ? 2 : 1);
+      return n.toFixed(decimals).replace('.', ',') + ' ' + units[i];
+    }
+    function getFileExt(name){ if(!name) return ''; var idx = name.lastIndexOf('.'); if(idx === -1) return ''; return name.substring(idx+1).toUpperCase(); }
+    function escapeXml(s){ if(typeof s !== 'string') return s; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+
+    // Build list of fields requested by loader (exclude pseudo attachment fields)
+    function getRequestedInternalFields(){
+      var fields = {};
+      SPV.cols.forEach(function(c){
+        if(!c || !c.Field) return;
+        var f = String(c.Field || '');
+        var fl = f.toLowerCase();
+        if(fl === 'attachments' || fl === 'attachments_type' || fl === 'attachments_size') return;
+        fields[f] = true;
+      });
+      if(SPV.groupingField) fields[SPV.groupingField] = true;
+      return Object.keys(fields);
+    }
+
+    // ------------- Filter parser (supports operators & Today/Heute()) -------------
+    function parseFilterToCaml(raw){
+      if(!raw) return '';
+      try {
+        var parts = raw.split('&&').map(function(x){ return x.trim(); }).filter(Boolean);
+        var camlParts = parts.map(function(p){ return parseSingleFilter(p); }).filter(Boolean);
+        if(camlParts.length === 0) return '';
+        var combined = camlParts[0];
+        for(var i=1;i<camlParts.length;i++) combined = '<And>' + combined + camlParts[i] + '</And>';
+        return combined;
+      } catch(e){ console.error('parseFilterToCaml', e); return ''; }
+    }
+    function parseSingleFilter(expr){
+      var m = expr.match(/^\s*([^<>!=]+)\s*(==|!=|>=|<=|>|<)\s*(.+)\s*$/);
+      if(!m) return '';
+      var field = m[1].trim(), op = m[2], rawVal = m[3].trim();
+      if(/^'.*'$/.test(rawVal) || /^".*"$/.test(rawVal)) rawVal = rawVal.substring(1, rawVal.length-1);
+      var valXml = '';
+      var todayMatch = rawVal.match(/^(Heute|Today)\(\s*([+-]?\d+)?\s*\)$/i);
+      if(todayMatch){
+        var offset = todayMatch[2];
+        if(offset === undefined || offset === null || offset === '') valXml = '<Value Type="DateTime" IncludeTimeValue="FALSE"><Today /></Value>';
+        else valXml = '<Value Type="DateTime" IncludeTimeValue="FALSE"><Today OffsetDays="' + parseInt(offset,10) + '" /></Value>';
+      } else {
+        var isoMatch = rawVal.match(/^\d{4}-\d{2}-\d{2}$/);
+        var dmyMatch = rawVal.match(/^\d{2}\.\d{2}\.\d{4}$/);
+        if(isoMatch || dmyMatch){
+          var iso;
+          if(dmyMatch){ var parts = rawVal.split('.'); iso = parts[2] + '-' + parts[1] + '-' + parts[0] + 'T00:00:00Z'; }
+          else iso = rawVal.indexOf('T') === -1 ? rawVal + 'T00:00:00Z' : rawVal;
+          valXml = '<Value Type="DateTime" IncludeTimeValue="FALSE">' + escapeXml(iso) + '</Value>';
+        } else valXml = '<Value Type="Text">' + escapeXml(rawVal) + '</Value>';
+      }
+      var opMap = { '==':'Eq', '!=':'Neq', '>=':'Geq', '<=':'Leq', '>':'Gt', '<':'Lt' };
+      var tag = opMap[op]; if(!tag) return '';
+      return '<' + tag + '><FieldRef Name="' + escapeXml(field) + '" />' + valXml + '</' + tag + '>';
+    }
+
+    // ------------- Attachments loader for lists (AttachmentFiles) -------------
+    function loadAttachmentsForItemIds(siteUrl, listGuidObj, ids, callback){
+      callback = callback || function(){};
+      if(!ids || ids.length === 0){ callback({}); return; }
+      try {
+        var ctx2 = new SP.ClientContext(siteUrl);
+        var web2 = ctx2.get_web();
+        var list2 = web2.get_lists().getById(listGuidObj);
+        var attCollections = [];
+        for(var i=0;i<ids.length;i++){
+          var li = list2.getItemById(ids[i]);
+          var atts = li.get_attachmentFiles();
+          attCollections.push({ id: ids[i], col: atts });
+          ctx2.load(atts);
+        }
+        ctx2.executeQueryAsync(function(){
+          var map = {};
+          attCollections.forEach(function(x){
+            var enumr = x.col.getEnumerator();
+            var arr = [];
+            while(enumr.moveNext()){
+              var af = enumr.get_current();
+              try {
+                var fn = af.get_fileName();
+                var url = af.get_serverRelativeUrl();
+                arr.push({ fileName: fn, url: url, type: getFileExt(fn), sizeBytes: null });
+              } catch(e){}
+            }
+            map[x.id] = arr;
+          });
+          callback(map);
+        }, function(sender,args){ console.error('Attachment load failed', args); callback({}); });
+      } catch(e){ console.error('loadAttachmentsForItemIds error', e); callback({}); }
+    }
+
+    // ------------- Load items (LIST_GUID-based) -------------
+    function loadListItems(forceRefresh){
+      forceRefresh = !!forceRefresh;
+      var subtitleEl = document.getElementById('spv-subtitle'); if(subtitleEl) subtitleEl.textContent = 'Lade Daten…';
+      var statusEl = document.getElementById('spv-status'); if(statusEl) statusEl.textContent = '';
+
+      if(!SPV.listGuid){ showToast('LIST_GUID ist nicht gesetzt.'); if(subtitleEl) subtitleEl.textContent = 'LIST_GUID fehlt'; return; }
+
+      // Determine siteUrl: prefer provided LIST_SITE_URL, else current web, else try to derive from LIST_URL
+      var siteUrl = SPV.siteUrl;
+      if(!siteUrl){
+        if(typeof _spPageContextInfo !== 'undefined' && _spPageContextInfo && _spPageContextInfo.webAbsoluteUrl) siteUrl = _spPageContextInfo.webAbsoluteUrl;
+        else if(SPV.listUrl){
+          try { var lower = SPV.listUrl.toLowerCase(); var idx = lower.indexOf('/lists/'); if(idx > -1) siteUrl = SPV.listUrl.substring(0, idx); } catch(e){}
+        }
+      }
+      if(!siteUrl){ if(subtitleEl) subtitleEl.textContent = 'Ziel-Web nicht ermittelbar'; return; }
+
+      var listGuidObj;
+      try { listGuidObj = new SP.Guid(SPV.listGuid); } catch(e){ showToast('Ungültige LIST_GUID'); if(subtitleEl) subtitleEl.textContent = 'LIST_GUID ungültig'; return; }
+
+      var wantsAttachments = SPV.cols.some(function(c){ return String(c.Field || '').toLowerCase() === 'attachments'; });
+      var wantsAttType = SPV.cols.some(function(c){ return String(c.Field || '').toLowerCase() === 'attachments_type'; });
+      var wantsAttSize = SPV.cols.some(function(c){ return String(c.Field || '').toLowerCase() === 'attachments_size'; });
+
+      // ViewFields: all requested internal fields (custom fields included)
+      var viewFieldsXml = '';
+      getRequestedInternalFields().forEach(function(f){ viewFieldsXml += '<FieldRef Name="' + escapeXml(f) + '" />'; });
+
+      var camlWhere = parseFilterToCaml(SPV.filterRaw);
+
+      var orderXml = '';
+      if(SPV.defaultOrder && Object.keys(SPV.defaultOrder).length>0){
+        for(var f in SPV.defaultOrder){
+          var dir = SPV.defaultOrder[f];
+          if(typeof dir === 'object') dir = dir.toString();
+          if(!dir) dir='ASC';
+          orderXml += '<FieldRef Name="'+escapeXml(f)+'" Ascending="'+(String(dir).toUpperCase()!=='DESC')+'"/>';
+        }
+      } else if(SPV.currentSort.field){
+        orderXml = '<FieldRef Name="'+escapeXml(SPV.currentSort.field)+'" Ascending="'+(SPV.currentSort.dir!=='DESC')+'"/>';
+      }
+
+      var queryXml = '<View><Query>';
+      if(camlWhere) queryXml += '<Where>' + camlWhere + '</Where>';
+      if(orderXml) queryXml += '<OrderBy>' + orderXml + '</OrderBy>';
+      queryXml += '</Query><ViewFields>' + viewFieldsXml + '</ViewFields><RowLimit>500</RowLimit></View>';
+
+      try {
+        var ctx = new SP.ClientContext(siteUrl);
+        var web = ctx.get_web();
+        var list = web.get_lists().getById(listGuidObj);
+
+        // Get base template to detect doc library
+        ctx.load(list, 'BaseTemplate', 'Title');
+        ctx.executeQueryAsync(function(){
+          var baseTemplate = list.get_baseTemplate();
+          var listTitle = list.get_title();
+          if(!(typeof LIST_Name !== 'undefined' && LIST_Name)){
+            var titleEl = document.getElementById('spv-title'); if(titleEl) titleEl.textContent = listTitle;
+          }
+          var isDocLib = (baseTemplate === 101);
+
+          var caml = new SP.CamlQuery(); caml.set_viewXml(queryXml);
+          var items = list.getItems(caml);
+
+          // Always load FieldValuesAsText to make custom text fields (like Passwort) available
+          if(isDocLib && (wantsAttachments || wantsAttType || wantsAttSize)){
+            ctx.load(items, 'Include(Id, FieldValuesAsText, File, FileSystemObjectType)');
+          } else {
+            ctx.load(items, 'Include(Id, FieldValuesAsText)');
+          }
+
+          ctx.executeQueryAsync(function(){
+            var enumerator = items.getEnumerator();
+            var arr = [];
+            var ids = [];
+            while(enumerator.moveNext()){
+              var it = enumerator.get_current();
+              arr.push(it);
+              try { ids.push(it.get_id()); } catch(e){}
+            }
+
+            if(isDocLib){
+              var map = {};
+              arr.forEach(function(it){
+                var id = null; try { id = it.get_id(); } catch(e){}
+                map[id] = [];
+                try {
+                  var fsot = it.get_fileSystemObjectType ? it.get_fileSystemObjectType() : null;
+                  if(fsot === 1) return; // folder -> skip
+                  var file = it.get_file && it.get_file();
+                  if(!file) return;
+                  var name = '', url = '', len = null;
+                  try { name = file.get_name ? file.get_name() : ''; } catch(e){}
+                  try { url = file.get_serverRelativeUrl ? file.get_serverRelativeUrl() : ''; } catch(e){}
+                  try { len = file.get_length ? file.get_length() : null; } catch(e){}
+                  if(name){ map[id] = [{ fileName: name, url: url, type:getFileExt(name), sizeBytes: len }]; }
+                } catch(e){}
+              });
+              SPV.attachments = map;
+              SPV.items = arr;
+              if(typeof OPTION_EXPAND_ON_BOOT !== 'undefined'){ var keys = getCurrentGroupKeys(); setGroupsCollapsedForKeys(keys, !OPTION_EXPAND_ON_BOOT); }
+              if(statusEl) statusEl.textContent = '';
+              if(subtitleEl) subtitleEl.textContent = 'Letzte Aktualisierung: ' + (new Date()).toLocaleString();
+              renderTable();
+            } else {
+              if(wantsAttachments || wantsAttType || wantsAttSize){
+                loadAttachmentsForItemIds(siteUrl, listGuidObj, ids, function(map){
+                  SPV.attachments = map || {};
+                  SPV.items = arr;
+                  if(typeof OPTION_EXPAND_ON_BOOT !== 'undefined'){ var keys2 = getCurrentGroupKeys(); setGroupsCollapsedForKeys(keys2, !OPTION_EXPAND_ON_BOOT); }
+                  if(statusEl) statusEl.textContent = '';
+                  if(subtitleEl) subtitleEl.textContent = 'Letzte Aktualisierung: ' + (new Date()).toLocaleString();
+                  renderTable();
+                });
+              } else {
+                SPV.attachments = {};
+                SPV.items = arr;
+                if(typeof OPTION_EXPAND_ON_BOOT !== 'undefined'){ var keys3 = getCurrentGroupKeys(); setGroupsCollapsedForKeys(keys3, !OPTION_EXPAND_ON_BOOT); }
+                if(statusEl) statusEl.textContent = '';
+                if(subtitleEl) subtitleEl.textContent = 'Letzte Aktualisierung: ' + (new Date()).toLocaleString();
+                renderTable();
+              }
+            }
+          }, function(sender,args){
+            var msg = 'Fehler beim Laden (Items): ' + (args && args.get_message ? args.get_message() : JSON.stringify(args));
+            if(statusEl) statusEl.textContent = msg; if(subtitleEl) subtitleEl.textContent = msg;
+            showToast(msg); console.error('JSOM Fehler Items', args);
+          });
+
+        }, function(sender,args){
+          var msg = 'Fehler beim Laden (List meta): ' + (args && args.get_message ? args.get_message() : JSON.stringify(args));
+          if(statusEl) statusEl.textContent = msg; if(subtitleEl) subtitleEl.textContent = msg;
+          showToast(msg); console.error('JSOM Fehler List meta', args);
+        });
+
+      } catch(e){
+        console.error(e);
+        var msg = 'JSOM-Fehler: ' + (e && e.message ? e.message : e);
+        var statusEl = document.getElementById('spv-status'); if(statusEl) statusEl.textContent = msg;
+        var subtitleEl = document.getElementById('spv-subtitle'); if(subtitleEl) subtitleEl.textContent = msg;
+      }
+    }
+
+    // ------------- Group helpers -------------
+    function getCurrentGroupKeys(){
+      var groupBy = document.getElementById('spv-group-by').value || '';
+      if(!groupBy) return [];
+      var keys = {};
+      SPV.items.forEach(function(it){ var g = valToString(getItemValue(it, groupBy)) || '(Leer)'; keys[g] = true; });
+      return Object.keys(keys).sort();
+    }
+    function setGroupsCollapsedForKeys(keys, collapsed){ keys.forEach(function(k){ SPV.groupCollapsed[k] = !!collapsed; }); }
+    function updateToggleGroupsButton(){
+      var btn = document.getElementById('spv-toggle-groups');
+      var groupBy = document.getElementById('spv-group-by').value || '';
+      if(!btn) return;
+      if(!groupBy){ btn.disabled = true; btn.style.opacity = '0.55'; btn.title = 'Gruppierung wählen, um alle Gruppen ein-/auszuklappen'; return; }
+      btn.disabled = false; btn.style.opacity = '1';
+      var keys = getCurrentGroupKeys();
+      if(keys.length === 0){ btn.textContent = 'Alle einklappen'; btn.title = 'Keine Gruppen vorhanden'; return; }
+      var allCollapsed = keys.every(function(k){ return !!SPV.groupCollapsed[k]; });
+      btn.textContent = allCollapsed ? 'Alle ausklappen' : 'Alle einklappen';
+      btn.title = allCollapsed ? 'Alle Gruppen ausklappen' : 'Alle Gruppen einklappen';
+    }
+    function toggleAllGroups(){ var keys = getCurrentGroupKeys(); if(keys.length === 0) return; var allCollapsed = keys.every(function(k){ return !!SPV.groupCollapsed[k]; }); setGroupsCollapsedForKeys(keys, !allCollapsed); renderTable(); }
+
+    // ------------- Get value helper (tries multiple sources incl FieldValuesAsText) -------------
+    function getItemValue(item, field){
+      try {
+        var v = item.get_item(field);
+        if(typeof v !== 'undefined' && v !== null){
+          if(typeof v === 'object' && v && typeof v.get_lookupValue === 'function') return v.get_lookupValue();
+          if(Array.isArray(v)) return v.map(function(x){ if(typeof x === 'object' && x && typeof x.get_lookupValue === 'function') return x.get_lookupValue(); if(x && x.Title) return x.Title; return safeText(x); }).join('; ');
+          if(typeof v === 'object' && v && v.get_url && v.get_description) return v.get_description ? v.get_description + ' (' + v.get_url + ')' : v.get_url;
+          return v;
+        }
+      } catch(e){}
+      try {
+        if(item.get_fieldValuesAsText){
+          var fvt = item.get_fieldValuesAsText();
+          if(fvt && typeof fvt.get_item === 'function'){
+            var tv = fvt.get_item(field);
+            if(typeof tv !== 'undefined' && tv !== null) return tv;
+          }
+        }
+      } catch(e){}
+      try {
+        var fv = item.get_fieldValues();
+        if(fv && typeof fv[field] !== 'undefined') return fv[field];
+      } catch(e){}
+      return '';
+    }
+
+    function valToString(v){ if(v === null || typeof v === 'undefined') return ''; if(Array.isArray(v)) return v.join('; '); return String(v); }
+    function isUrl(s){ return /^https?:\/\//i.test(s); }
+
+    // ------------- Render logic (search uses columns except those with noSearch:true) -------------
+    function renderTable(){
+      closeAllFilterPopups();
+      var tbody = document.getElementById('spv-tbody'); tbody.innerHTML = '';
+      var searchInput = (document.getElementById('spv-search').value || '').toLowerCase();
+
+      // Build searchable fields list: all defined fields except noSearch:true and pseudo attachments
+      var searchableFields = SPV.cols.filter(function(c){
+        if(!c || !c.Field) return false;
+        var f = String(c.Field || '').toLowerCase();
+        if(f === 'attachments' || f === 'attachments_type' || f === 'attachments_size') return false;
+        if(c.noSearch) return false;
+        return true;
+      }).map(function(c){ return c.Field; });
+
+      // If attachments is present in columns, include pseudo field in searchableFields so we can search filenames
+      var hasAttachmentsColumn = SPV.cols.some(function(c){ return String(c.Field||'').toLowerCase() === 'attachments'; });
+      if(hasAttachmentsColumn){
+        // push a marker field name that we'll handle specially when matching
+        searchableFields.push('__ATTACHMENTS_FILENAME__');
+      }
+
+      var colFilters = SPV.activeFilters || {};
+
+      var visible = SPV.items.filter(function(it){
+        for(var f in colFilters){
+          var val = valToString(getItemValue(it,f));
+          if(val !== colFilters[f]) return false;
+        }
+        if(searchInput){
+          var found = false;
+          for(var i=0;i<searchableFields.length;i++){
+            var fld = searchableFields[i];
+            if(fld === '__ATTACHMENTS_FILENAME__'){
+              // check attachments filenames for this item (works for lists and doclibs)
+              var id = null;
+              try { id = it.get_id(); } catch(e){}
+              var attArr = (id && SPV.attachments && SPV.attachments[id]) ? SPV.attachments[id] : [];
+              for(var a=0;a<attArr.length; a++){
+                var fn = (attArr[a].fileName || '').toLowerCase();
+                if(fn.indexOf(searchInput) !== -1){ found = true; break; }
+              }
+              if(found) break;
+              continue;
+            } else {
+              var v = valToString(getItemValue(it,fld)).toLowerCase();
+              if(v.indexOf(searchInput) !== -1){ found = true; break; }
+            }
+          }
+          if(!found) return false;
+        }
+        return true;
+      });
+
+      var groupBy = document.getElementById('spv-group-by').value || '';
+      if(groupBy){
+        var groups = {};
+        visible.forEach(function(it){
+          var g = valToString(getItemValue(it, groupBy)) || '(Leer)';
+          if(!groups[g]) groups[g]=[];
+          groups[g].push(it);
+        });
+        Object.keys(groups).sort().forEach(function(gk){
+          var trh = document.createElement('tr');
+          var tdh = document.createElement('td');
+          var colCount = Math.max(1, SPV.cols.length || 1);
+          tdh.colSpan = colCount;
+          tdh.setAttribute('colspan', String(colCount));
+          tdh.className = 'spv-group-cell';
+
+          var container = document.createElement('div');
+          container.className = 'spv-group-header';
+          var chevron = document.createElement('span'); chevron.className='spv-chevron'; chevron.textContent = (SPV.groupCollapsed[gk] ? '▸' : '▾'); chevron.style.minWidth='16px';
+          var txt = document.createElement('div'); txt.textContent = gk + ' ('+groups[gk].length+')'; txt.style.fontWeight='700'; txt.style.color='var(--berry)';
+          container.appendChild(chevron); container.appendChild(txt);
+          tdh.appendChild(container); trh.appendChild(tdh); tbody.appendChild(trh);
+
+          tdh.addEventListener('click', function(){ SPV.groupCollapsed[gk] = !SPV.groupCollapsed[gk]; renderTable(); });
+
+          if(!SPV.groupCollapsed[gk]){
+            groups[gk].forEach(function(it){ tbody.appendChild(renderItemRow(it)); });
+          }
+        });
+      } else {
+        visible.forEach(function(it){ tbody.appendChild(renderItemRow(it)); });
+      }
+
+      var countEl = document.getElementById('spv-count'); if(countEl) countEl.textContent = visible.length + ' Einträge';
+      document.querySelectorAll('.spv-sort-indicator').forEach(function(el){ el.textContent=''; });
+      if(SPV.currentSort.field){
+        var el = document.querySelector('th[data-field="'+SPV.currentSort.field+'"] .spv-sort-indicator');
+        if(el) el.textContent = (SPV.currentSort.dir === 'ASC' ? '▲' : '▼');
+      }
+      updateToggleGroupsButton();
+    }
+
+    // ------------- render single row -------------
+    function renderItemRow(it){
+      var tr = document.createElement('tr');
+      SPV.cols.forEach(function(c){
+        var td = document.createElement('td');
+        var field = String(c.Field || '');
+        var fl = field.toLowerCase();
+
+        // pseudo attachment columns
+        if(fl === 'attachments' || fl === 'attachments_type' || fl === 'attachments_size'){
+          var id = null; try { id = it.get_id(); } catch(e){}
+          var attArr = (id && SPV.attachments && SPV.attachments[id]) ? SPV.attachments[id] : [];
+
+          if(fl === 'attachments'){
+            if(attArr && attArr.length>0){
+              var wrap = document.createElement('div'); wrap.className = 'spv-attachments-list';
+              attArr.forEach(function(a){ var aEl = document.createElement('a'); aEl.href = a.url || '#'; aEl.textContent = a.fileName || ''; aEl.className = 'spv-attachment'; aEl.target = '_blank'; aEl.rel = 'noopener noreferrer'; wrap.appendChild(aEl); });
+              td.appendChild(wrap);
+            } else td.textContent = '';
+            tr.appendChild(td); return;
+          }
+          if(fl === 'attachments_type'){ td.textContent = (attArr || []).map(function(a){ return a.type || getFileExt(a.fileName); }).filter(Boolean).join('\n'); tr.appendChild(td); return; }
+          if(fl === 'attachments_size'){ td.textContent = (attArr || []).map(function(a){ return formatBytes(a.sizeBytes); }).filter(Boolean).join('\n'); tr.appendChild(td); return; }
+        }
+
+        // normal/custom fields
+        var raw = getItemValue(it, field);
+        var txt = valToString(raw);
+        td.setAttribute('data-value', txt);
+
+        if(c.onClick){
+          td.style.cursor='pointer'; td.style.color = 'var(--berry)';
+          td.addEventListener('click', function(e){
+            try {
+              var fnName = c.onClick.replace(/\(.*\)/,'');
+              var fn = window[fnName];
+              if(typeof fn === 'function') fn(this);
+              else window.CopytoClipboard(this);
+            } catch(err){
+              window.CopytoClipboard(this);
+            }
+          });
+        }
+
+        if(isUrl(txt)){
+          var a = document.createElement('a'); a.href = txt; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = txt; td.appendChild(a);
+        } else {
+          td.textContent = txt;
+          if(txt.length>220) td.title = txt;
+        }
+
+        tr.appendChild(td);
+      });
+      return tr;
+    }
+
+    // ------------- helpers used above -------------
+    function isUrl(s){ return /^https?:\/\//i.test(s); }
+
+    // ------------- sorting toggle (server-side reload) -------------
+    function toggleSort(field){
+      var fl = String(field || '').toLowerCase();
+      if(fl === 'attachments' || fl === 'attachments_type' || fl === 'attachments_size'){ showToast('Sortierung für Dateispalten ist nicht verfügbar.'); return; }
+      if(SPV.currentSort.field === field) SPV.currentSort.dir = (SPV.currentSort.dir === 'ASC') ? 'DESC' : 'ASC';
+      else { SPV.currentSort.field = field; SPV.currentSort.dir = 'ASC'; }
+      SPV.defaultOrder = {}; var o = {}; o[field] = SPV.currentSort.dir; SPV.defaultOrder = o;
+      loadListItems(true);
+    }
+
+    // ------------- filter popup helpers -------------
+    function closeAllFilterPopups(){ var container = document.getElementById('spv-container'); if(!container) return; container.querySelectorAll('.spv-filter-popup').forEach(function(p){ p.remove(); }); }
+    function openHeaderFilter(field, thElement, mouseEvent){
+      closeAllFilterPopups();
+      var valsMap = {};
+      SPV.items.forEach(function(it){
+        var v = valToString(getItemValue(it, field));
+        if(v === '') v = '(Leer)';
+        valsMap[v] = (valsMap[v] || 0) + 1;
+      });
+      var values = Object.keys(valsMap).sort();
+
+      var popup = document.createElement('div'); popup.className = 'spv-filter-popup'; popup.setAttribute('data-field', field); popup.style.visibility='hidden';
+
+      var hdr = document.createElement('div'); hdr.style.display='flex'; hdr.style.justifyContent='space-between'; hdr.style.alignItems='center'; hdr.style.marginBottom='6px';
+      var h = document.createElement('div'); h.textContent = 'Filter: ' + (field || ''); h.style.fontWeight='700';
+      var clearBtn = document.createElement('button'); clearBtn.className='spv-btn secondary'; clearBtn.textContent='Zurücksetzen'; clearBtn.style.fontSize='12px';
+      clearBtn.addEventListener('click', function(ev){ ev.stopPropagation(); delete SPV.activeFilters[field]; renderTable(); popup.remove(); });
+      hdr.appendChild(h); hdr.appendChild(clearBtn); popup.appendChild(hdr);
+
+      var search = document.createElement('input'); search.className='spv-input'; search.placeholder='Werte filtern...'; search.style.marginBottom='6px';
+      search.addEventListener('input', function(){ renderValuesList(valuesContainer, this.value); });
+      popup.appendChild(search);
+
+      var valuesContainer = document.createElement('div'); popup.appendChild(valuesContainer);
+
+      function renderValuesList(container, filterText){
+        container.innerHTML = '';
+        var f = (filterText || '').toLowerCase();
+        if(typeof SPV.activeFilters[field] !== 'undefined'){
+          var curRow = document.createElement('div'); curRow.className='value'; curRow.style.fontWeight='600'; curRow.textContent = 'Aktiv: ' + (SPV.activeFilters[field] === '' ? '(Leer)' : SPV.activeFilters[field]); container.appendChild(curRow);
+        }
+        var allRow = document.createElement('div'); allRow.className='value'; allRow.textContent = 'Alle (' + SPV.items.length + ')'; allRow.style.fontWeight='600';
+        allRow.addEventListener('click', function(ev){ ev.stopPropagation(); delete SPV.activeFilters[field]; renderTable(); popup.remove(); });
+        container.appendChild(allRow);
+
+        values.forEach(function(v){
+          if(f && v.toLowerCase().indexOf(f) === -1) return;
+          var div = document.createElement('div'); div.className='value'; div.textContent = v + ' (' + valsMap[v] + ')';
+          div.addEventListener('click', function(ev){ ev.stopPropagation(); SPV.activeFilters[field] = (v === '(Leer)' ? '' : v); renderTable(); popup.remove(); });
+          container.appendChild(div);
+        });
+      }
+      renderValuesList(valuesContainer, '');
+
+      var container = document.getElementById('spv-container'); container.appendChild(popup);
+
+      // position relative to container (fix sideload offsets)
+      var containerRect = container.getBoundingClientRect();
+      var popupW = popup.offsetWidth; var popupH = popup.offsetHeight;
+      var left, top;
+      if(mouseEvent && typeof mouseEvent.clientX !== 'undefined'){
+        left = mouseEvent.clientX - containerRect.left + container.scrollLeft;
+        top  = mouseEvent.clientY - containerRect.top + container.scrollTop;
+        var maxLeft = containerRect.width - popupW - 8; if(left > maxLeft) left = Math.max(8, maxLeft);
+        var maxTop = containerRect.height - popupH - 8; if(top > maxTop){ var altTop = mouseEvent.clientY - containerRect.top + container.scrollTop - popupH - 8; if(altTop >= 8) top = altTop; else top = Math.max(8, maxTop); }
+      } else if(thElement){
+        var rect = thElement.getBoundingClientRect();
+        left = rect.left - containerRect.left + container.scrollLeft;
+        top  = rect.bottom - containerRect.top + container.scrollTop;
+        var maxLeft = containerRect.width - popupW - 8; if(left > maxLeft) left = Math.max(8, maxLeft);
+        var maxTop = containerRect.height - popupH - 8; if(top > maxTop){ var altTop = rect.top - containerRect.top + container.scrollTop - popupH - 8; if(altTop >= 8) top = altTop; else top = Math.max(8, maxTop); }
+      } else { left = 16; top = 60; }
+
+      popup.style.left = left + 'px'; popup.style.top = top + 'px'; popup.style.visibility = 'visible';
+      setTimeout(function(){ try{ popup.querySelector('.spv-input').focus(); }catch(e){} },50);
+    }
+
+    // ------------- Init / startup -------------
+    function initUI(){
+      var titleEl = document.getElementById('spv-title');
+      if(typeof LIST_Name !== 'undefined' && LIST_Name) titleEl.textContent = LIST_Name;
+
+      var theadRow = document.getElementById('spv-thead-row'); theadRow.innerHTML = '';
+      SPV.cols.forEach(function(c){
+        var th = document.createElement('th'); th.className = 'spv-sortable'; th.setAttribute('data-field', c.Field);
+        var inner = document.createElement('div'); inner.className = 'spv-header-main'; inner.style.position = 'relative';
+        var title = document.createElement('div'); title.textContent = c.Title || c.Field; title.style.flex='1'; title.style.userSelect='none';
+        title.addEventListener('click', function(ev){ ev.stopPropagation(); toggleSort(c.Field); });
+        title.addEventListener('contextmenu', function(ev){ ev.preventDefault(); ev.stopPropagation(); openHeaderFilter(c.Field, th, ev); return false; });
+        var sortSpan = document.createElement('span'); sortSpan.className = 'spv-sort-indicator'; sortSpan.textContent = ''; sortSpan.addEventListener('click', function(ev){ ev.stopPropagation(); toggleSort(c.Field); });
+        inner.appendChild(title); inner.appendChild(sortSpan); th.appendChild(inner); theadRow.appendChild(th);
+      });
+
+      var searchEl = document.getElementById('spv-search'); if(searchEl) searchEl.addEventListener('input', renderTable);
+      var refreshEl = document.getElementById('spv-refresh'); if(refreshEl) refreshEl.addEventListener('click', function(){ loadListItems(true); });
+      var toggleBtn = document.getElementById('spv-toggle-groups'); if(toggleBtn) toggleBtn.addEventListener('click', function(){ toggleAllGroups(); });
+
+      var groupSelect = document.getElementById('spv-group-by'); groupSelect.innerHTML = '<option value="">Keine Gruppierung</option>';
+      if(SPV.groupingField){ groupSelect.innerHTML += '<option value="'+SPV.groupingField+'">'+SPV.groupingField+'</option>'; groupSelect.value = SPV.groupingField; }
+      groupSelect.addEventListener('change', function(){ SPV.grouped = !!this.value; if(typeof OPTION_EXPAND_ON_BOOT !== 'undefined'){ var keys = getCurrentGroupKeys(); setGroupsCollapsedForKeys(keys, !OPTION_EXPAND_ON_BOOT); } renderTable(); });
+
+      document.addEventListener('click', closeAllFilterPopups); window.addEventListener('resize', closeAllFilterPopups);
+    }
+
+    (function boot(){
+      var tries = 0;
+      function waitForSP(){
+        tries++;
+        if(window.SP && SP.ClientContext){ initUI(); loadListItems(); } else { if(tries<40) setTimeout(waitForSP,250); else { var subEl = document.getElementById('spv-subtitle'); if(subEl) subEl.textContent = 'SP.JS nicht verfügbar'; } }
+      }
+      waitForSP();
+    })();
+
+  </script>
+</body>
+</html>

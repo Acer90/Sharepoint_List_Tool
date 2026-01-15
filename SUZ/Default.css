@@ -1,0 +1,166 @@
+:root {
+    --bg_box: rgba(0,0,0,0.47);
+    --bg_box_shadow: rgba(0,0,0,0.2);
+    --bg_contend: rgba(255,255,255,1);
+    --bg_infobox: rgb(180, 16, 105);
+  
+    --txt_color: rgb(255,255,255);
+    --txt_color_invert: rgb(0,0,0);
+    --txt_color_link: rgba(250,250,250,1);
+    --txt_color_hover: rgba(180, 16, 105, 1);
+
+    --item-txt_color: rgb(255,255,255);
+    --item-box_color: rgba(180, 16, 105,0.4);
+    --item-box_hover: rgba(180, 16, 105, 0.6);
+    --item-box_border: rgba(180, 16, 105,0.8);
+    --item-line_color: rgb(255,255,255);
+  
+    --item-menu-txt_color: rgb(255,255,255);
+    --item-menu-box_color: rgba(180, 16, 105, 0.4);
+    --item-menu-box_hover: rgba(180, 16, 105, 0.6);
+    --item-menu-box_border: rgba(58, 58, 58, 0.8);
+    --item-menu-line_color: rgb(255,255,255);
+
+    --menü-border: rgb(62,62,62);
+    --menü-box_bg: #ffffff;
+    --menü-box_hover: rgb(180, 16, 105);
+    --menü-box_hover_border: rgba(180, 16, 105, 0.8);
+    --menü-txt-hover:  rgb(255, 255, 255);
+    --menü-txt:  rgb(0, 0, 0);
+
+    --item-termin-txt-color:  rgb(0,0,0);
+    --item-termin-txt-hover:  rgb(255, 255, 255);
+    --item-termin-box_color: #afb076;
+    --item-termin-box_hover: rgba(180, 16, 105, 1);
+
+    --head-menu-txt-hover: #cccccc;
+   
+
+    --primary-color: rgb(180,16,105);         /* magenta */
+    --primary-color-dark: rgb(150,10,90);
+    --primary-gradient-1: rgba(201,40,120,1);
+    --primary-gradient-2: rgba(160,12,90,1);
+    --accent-blue: #007acc;
+    --bg-color: #f5f5f8;
+    --muted: #757575;
+    --card-bg: #ffffff;
+    --table-header-bg: #f6f6f7;
+    --border-light: rgba(0,0,0,0.06);
+    --success: #1aa55a;
+    --danger: #b00020;
+    --radius-lg: 12px;
+    --radius-md: 8px;
+    --shadow-strong: 0 18px 40px rgba(0,0,0,0.20);
+    --shadow-soft: 0 8px 20px rgba(0,0,0,0.10);
+    --transition-fast: 180ms ease-out;
+}
+
+div[class^="pageLayout_"] {
+  /*background-color: rgb(72,81,58);*/
+  background-image: url('https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/img/bg3.jpg');
+  background-repeat: no-repeat;
+  background-size: cover;
+  /*color: #FFFFFF;*/
+}
+
+div[class^="feedback_"], div[class*=" feedback_"] {
+  display: none;
+}
+
+div[class^="pageTitle_"], div[class*=" pageTitle_"] {
+  display: none;
+}
+
+.ms-compositeHeader-addnCommands .ms-Button-textContainer {
+  color: var(--txt_color);
+}
+
+.ms-compositeHeader {
+  padding: 0px 20px 2px 20px;
+}
+
+span[class^="title-"],
+span[class*=" title-"] {
+  color: var(--txt_color);
+  content: "Portal - Sanitätsunterstützungszentrum Kiel";
+}
+
+/*.o365cs-nav-brandingText {
+  content: "Sharepoint - Portal SanUstgZ Kiel";
+}*/
+
+div[class^="banner_"], div[class*=" banner_"] {
+  background-color: var(--bg_infobox);
+  margin-top: -20px;
+  height: 100px;
+}
+
+i[class^="chevron-"],
+i[class*=" chevron_"],
+.ms-HorizontalNavItem-link,
+.ms-HorizontalNav-chevronDown {
+  color: var(--txt_color);
+}
+
+.i[class^="chevron-"]:hover,
+.chevron-118,
+.ms-HorizontalNav-chevronDown:hover,
+.ms-HorizontalNavItem-link:hover {
+  color: var(--head-menu-txt-hover);
+}
+
+.ms-siteLogoContainerOuter {
+  border: none;
+}
+
+.SPPageChrome-app .commandBarWrapper{
+  border: 0px;
+}
+
+.statusScreenReader {
+  display: none;
+}
+
+.SPPageChrome-app .ms-CommandBar,
+.root_4195d733 {
+  background-color: rgba(0,0,0,0);
+}
+
+#CommandBar10share,
+#CommandBar10new,
+#CommandBar10promote {
+  display: none;
+}
+
+.SPPageChrome-app .ms-CommandBar .ms-CommandBarItem-commandText,
+.SPPageChrome-app .ms-CommandBar .ms-CommandBarItem-icon {
+  color: rgba(0,0,0,0);
+  display: none;
+  
+}
+
+
+.ms-compositeHeader-headerAndNavContainer .ms-HorizontalNav {
+  margin: 0 auto;
+  max-width: 1000px;
+  width: 1440px;
+  padding-left: 80px;
+}
+
+
+.CanvasZone {
+  background-color: white;
+}
+
+.CanvasToolboxHint{
+  color: red;
+}
+
+.ms-CommandBarItem {
+  z-index: 10000;
+}
+
+.ms-CommandBar-primaryCommands,
+.ms-CommandBarItem-chevronDown {
+  z-index: -100;
+}

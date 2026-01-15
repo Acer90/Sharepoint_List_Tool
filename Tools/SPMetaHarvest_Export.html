@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https://*; child-src 'none';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- jQuery, sp.js, SP.Core sind laut Loader bereits vorgeladen -->
+  <style>
+    :root { --berry: #b41069; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f8f6f8;
+      color: #1f1f1f;
+    }
+    h1 {
+      color: var(--berry);
+      margin-top: 1rem;
+      font-size: 1.5rem;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e1e8;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-top: 1rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    label { display: block; margin: 0.5rem 0 0.25rem; font-weight: 600; }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #cfc7d2;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    button {
+      background: var(--berry);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      transition: opacity 0.15s ease;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .hint { color: #555; font-size: 0.9rem; }
+    pre {
+      background: #1e1e1e;
+      color: #e5e5e5;
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow: auto;
+      font-size: 0.9rem;
+    }
+    .status { margin-top: 0.75rem; font-size: 0.95rem; }
+    .status.ok { color: #0b8c54; }
+    .status.err { color: #b41010; }
+    .pill {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      background: rgba(180,16,105,0.12);
+      color: var(--berry);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      margin-left: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>SharePoint Export – Listen &amp; Views</h1>
+  <div class="card">
+    <p class="hint">
+      1) Alte Site-URL angeben &rarr; <strong>Export</strong> erzeugt eine JSON-Datei mit Listen-GUIDs und Views.
+      <br>2) Datei im nächsten Schritt (Abgleich) verwenden.
+    </p>
+
+    <label for="oldSiteUrl">Alte Site-URL</label>
+    <input id="oldSiteUrl" type="text" placeholder="https://zsandstbw.ecm.bundeswehr.org/portale/P5603398863" />
+
+    <button id="btnExport">Export starten</button>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h3>Beispiel-Ausgabe</h3>
+    <pre>{
+  "siteUrl": "https://.../P5603398863",
+  "exportedAt": "2026-01-12T09:30:00Z",
+  "lists": [
+    {
+      "title": "Dokumente",
+      "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "serverRelativeUrl": "/portale/P5603398863/Shared Documents",
+      "defaultViewUrl": "/portale/P5603398863/Shared Documents/Forms/AllItems.aspx",
+      "views": [
+        { "title": "Alle Dokumente", "id": "1111...2222", "serverRelativeUrl": "/portale/.../AllItems.aspx", "url": "/portale/.../AllItems.aspx" }
+      ]
+    }
+  ]
+}</pre>
+  </div>
+
+  <script>
+    // Hilfsfunktionen
+    const setStatus = (msg, type = "") => {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status " + type;
+    };
+
+    const downloadJson = (data, filename) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    };
+
+    const fetchListsWithViews = async (siteUrl) => {
+      const listsUrl = `${siteUrl}/_api/web/lists?$select=Title,Id,DefaultViewUrl,RootFolder/ServerRelativeUrl&$expand=RootFolder`;
+      const listsResp = await $.ajax({
+        url: listsUrl,
+        method: "GET",
+        headers: { "Accept": "application/json;odata=nometadata" }
+      });
+
+      const lists = listsResp.value || [];
+      const withViews = [];
+
+      for (const list of lists) {
+        // Skip hidden/system lists if needed (adjust filters as required)
+        const viewsUrl = `${siteUrl}/_api/web/lists(guid'${list.Id}')/views?$select=Title,Id,ServerRelativeUrl,Url`;
+        let views = [];
+        try {
+          const viewsResp = await $.ajax({
+            url: viewsUrl,
+            method: "GET",
+            headers: { "Accept": "application/json;odata=nometadata" }
+          });
+          views = viewsResp.value || [];
+        } catch (e) {
+          console.warn("Konnte Views nicht laden", list.Title, e);
+        }
+
+        withViews.push({
+          title: list.Title,
+          id: list.Id,
+          serverRelativeUrl: list.RootFolder?.ServerRelativeUrl || "",
+          defaultViewUrl: list.DefaultViewUrl || "",
+          views: views.map(v => ({
+            title: v.Title,
+            id: v.Id,
+            serverRelativeUrl: v.ServerRelativeUrl || "",
+            url: v.Url || ""
+          }))
+        });
+      }
+      return withViews;
+    };
+
+    $(function() {
+      $("#btnExport").on("click", async function() {
+        const siteUrl = ($("#oldSiteUrl").val() || "").trim();
+        if (!siteUrl) {
+          setStatus("Bitte eine gültige alte Site-URL angeben.", "err");
+          return;
+        }
+        $(this).prop("disabled", true);
+        setStatus("Export läuft …", "");
+
+        try {
+          const lists = await fetchListsWithViews(siteUrl);
+          const exportObj = {
+            siteUrl,
+            exportedAt: new Date().toISOString(),
+            lists
+          };
+          downloadJson(exportObj, "sp_export_old.json");
+          setStatus(`Export abgeschlossen (${lists.length} Listen).`, "ok");
+        } catch (e) {
+          console.error(e);
+          setStatus("Fehler beim Export. Details in der Konsole.", "err");
+        } finally {
+          $(this).prop("disabled", false);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

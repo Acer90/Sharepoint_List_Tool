@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SP List Tool — Modern</title>
+
+  <style>
+    :root{
+      --berry: #b41069;
+      --berry-700: #90104f;
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --muted: #7a7a86;
+      --border: #e6e6ea;
+      --success: #2ea44f;
+      --danger: #e05b4d;
+      --shadow: 0 6px 18px rgba(17,17,17,0.06);
+      --radius: 8px;
+      --mono: "Consolas", "Courier New", monospace;
+      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* container */
+    #spListTool {
+      max-width: 1180px;
+      margin: 18px auto;
+      color: #222;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      border: 1px solid var(--border);
+    }
+
+    header.tool-header {
+      display:flex;
+      gap:16px;
+      align-items:center;
+      margin-bottom:12px;
+    }
+    .logo {
+      width:56px;
+      height:56px;
+      border-radius:10px;
+      background: linear-gradient(180deg, var(--berry), var(--berry-700));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#fff;
+      font-weight:700;
+      font-size:20px;
+      box-shadow: 0 6px 18px rgba(180,16,105,0.12);
+    }
+    .title {
+      display:flex;
+      flex-direction:column;
+    }
+    .title h1 {
+      margin:0;
+      font-size:18px;
+      letter-spacing:0.2px;
+    }
+    .title p {
+      margin:2px 0 0 0;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    /* toolbar */
+    .toolbar {
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin:14px 0;
+      flex-wrap:wrap;
+    }
+    .input, .select {
+      height:40px;
+      padding:8px 12px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-size:13px;
+      outline:none;
+      transition:box-shadow .12s ease, border-color .12s ease;
+    }
+    /* make siteUrl take full available width */
+    #siteUrl { flex: 1 1 420px; min-width: 320px; }
+
+    .input:focus, .select:focus {
+      box-shadow:0 4px 12px rgba(180,16,105,0.08);
+      border-color:var(--berry);
+    }
+    .btn {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 12px;
+      height:40px;
+      border-radius:8px;
+      border:1px solid transparent;
+      background:var(--berry);
+      color:#fff;
+      cursor:pointer;
+      font-weight:600;
+      font-size:13px;
+      transition:transform .04s ease, box-shadow .08s ease, opacity .08s ease;
+    }
+    .btn.secondary {
+      background:transparent;
+      color:var(--berry);
+      border:1px solid rgba(180,16,105,0.12);
+    }
+    .btn.ghost {
+      background:transparent;
+      color:var(--muted);
+      border:1px solid var(--border);
+    }
+    .btn:active { transform:translateY(1px); }
+    .muted { color:var(--muted); font-size:13px; }
+
+    /* table */
+    .table-wrap {
+      overflow:auto;
+      margin-top:12px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, #fff, #fbfbfc);
+    }
+    table.sp-table {
+      width:100%;
+      border-collapse:collapse;
+      min-width:920px;
+    }
+    table.sp-table thead th {
+      position:sticky;
+      top:0;
+      background:linear-gradient(180deg,#fff,#fafafa);
+      padding:12px 14px;
+      text-align:left;
+      font-size:13px;
+      color:#444;
+      border-bottom:1px solid var(--border);
+    }
+    table.sp-table tbody td {
+      padding:12px 14px;
+      border-bottom:1px solid #f1f1f4;
+      vertical-align:middle;
+      font-size:13px;
+    }
+    table.sp-table tbody tr:hover { background:rgba(180,16,105,0.03); }
+
+    .name-link { color:var(--berry); font-weight:600; text-decoration:none; }
+    .guid { font-family:var(--mono); color:#3a3a3a; font-size:12px; }
+    .pill {
+      display:inline-block;
+      padding:6px 8px;
+      border-radius:999px;
+      background:#f3f0f5;
+      color:var(--berry);
+      font-weight:600;
+      font-size:12px;
+    }
+    .status-yes { color:var(--success); font-weight:700; }
+    .status-no { color:var(--danger); font-weight:700; }
+
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    .action-btn {
+      background:transparent;
+      border:1px solid rgba(34,34,34,0.06);
+      color:var(--berry);
+      padding:6px 8px;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:13px;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+    }
+    .action-btn.copy { background:#fff; border:1px dashed rgba(180,16,105,0.14); }
+    .action-btn.hide { background:var(--berry); color:#fff; border-color:var(--berry-700); }
+    .action-btn.small { padding:6px 8px; font-size:12px; }
+
+    .pager {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-end;
+      padding:12px;
+    }
+    .page-btn {
+      background:transparent;
+      border:1px solid var(--border);
+      padding:8px 10px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    .counter { color:var(--muted); font-size:13px; }
+
+    /* responsive */
+    @media (max-width:920px){
+      .toolbar { flex-direction:column; align-items:stretch; }
+      header.tool-header { gap:12px; }
+      .title h1 { font-size:16px; }
+      table.sp-table { min-width:700px; }
+    }
+
+    /* small helper */
+    .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+  </style>
+</head>
+<body>
+  <div id="spListTool" class="card" role="region" aria-label="SharePoint Listen Tool">
+    <header class="tool-header">
+      <div class="logo" aria-hidden="true">SP</div>
+      <div class="title">
+        <h1>Listen-Verwaltung</h1>
+        <p class="muted">Site-URL angeben, Listen anzeigen, filtern & Bulk-Aktionen ausführen</p>
+      </div>
+    </header>
+
+    <div class="toolbar" role="toolbar" aria-label="Tool Bar">
+      <input id="siteUrl" class="input" type="text" placeholder="Site-URL (z. B. https://ustgber.ecm.bundeswehr.org/arbeitsbereiche/A5620048633) — leer = aktuelle Site" aria-label="SharePoint Site URL" />
+      <button id="btnLoad" class="btn" title="Listen laden" aria-label="Listen laden">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9.707 18.293-6.387-6.387" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Laden
+      </button>
+
+      <select id="filterHidden" class="select">
+        <option value="all">Alle Sichtbarkeiten</option>
+        <option value="visible" selected>Nur sichtbar</option>
+        <option value="hidden">Nur ausgeblendet</option>
+      </select>
+
+      <select id="filterType" class="select">
+        <option value="all">Alle Typen</option>
+        <option value="100">Custom List (100)</option>
+        <option value="101">Document Library (101)</option>
+        <option value="106">Discussion (106)</option>
+        <option value="109">Calendar (109)</option>
+        <option value="102">Survey (102)</option>
+        <option value="other">Andere</option>
+      </select>
+
+      <input id="searchName" class="input" type="text" placeholder="Suche nach Name oder GUID..." aria-label="Search lists" style="min-width:260px;" />
+
+      <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <select id="pageSize" class="select" title="Einträge pro Seite">
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+
+        <button id="btnBulkShow" class="btn secondary" title="Ausgewählte einblenden">Einblenden</button>
+        <button id="btnBulkHide" class="btn ghost" title="Ausgewählte ausblenden" style="border-color:rgba(224,91,77,0.08); color:var(--danger);">Ausblenden</button>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="resultArea" aria-live="polite">
+      <table class="sp-table" id="listsTable" role="table" style="display:none;">
+        <thead>
+          <tr role="row">
+            <th role="columnheader" style="width:40px;"><input id="selectAll" type="checkbox" aria-label="Alle auswählen" /></th>
+            <th role="columnheader">Name</th>
+            <th role="columnheader">GUID</th>
+            <th role="columnheader">Sichtbar</th>
+            <th role="columnheader">Typ</th>
+            <th role="columnheader">Aktionen</th>
+          </tr>
+        </thead>
+        <tbody role="rowgroup"></tbody>
+      </table>
+
+      <div id="noResults" class="card" style="display:none; padding:16px; border-radius:8px; margin-top:12px;">
+        <div class="muted" id="noResultsText">Keine Listen gefunden.</div>
+      </div>
+    </div>
+
+    <div class="pager" id="pager" style="display:none;">
+      <div class="counter" id="pageInfo">Seite 1 von 1</div>
+      <div style="flex:1"></div>
+      <button id="firstPage" class="page-btn" title="Erste Seite">«</button>
+      <button id="prevPage" class="page-btn" title="Vorherige Seite">‹</button>
+      <button id="nextPage" class="page-btn" title="Nächste Seite">›</button>
+      <button id="lastPage" class="page-btn" title="Letzte Seite">»</button>
+    </div>
+  </div>
+
+  <script>
+  (function($){
+    // ----- state -----
+    var allRows = [];
+    var filteredRows = [];
+    var currentPage = 1;
+    var pageSize = parseInt($('#pageSize').val(),10) || 50;
+    var currentSiteUrl = '';
+    var loadInProgress = false;
+
+    // ----- normalize user-provided URL
+    function normalizeSiteUrl(url) {
+      if(!url) return url;
+      // trim whitespace
+      url = url.trim();
+      // remove query/hash
+      url = url.split('?')[0].split('#')[0];
+      // remove trailing filename segments often used for pages so we keep site root
+      // cut at known segments like '/SitePages/', '/Pages/', '/SiteAssets/', '/_layouts/', '/Lists/'
+      var patterns = ['/SitePages/','/Pages/','/SiteAssets/','/_layouts/','/Lists/','/SitePages','/pages'];
+      var lower = url.toLowerCase();
+      for(var i=0;i<patterns.length;i++){
+        var p = patterns[i].toLowerCase();
+        var idx = lower.indexOf(p);
+        if(idx > -1) {
+          // cut off at pattern start
+          return url.substring(0, idx).replace(/\/+$/,'');
+        }
+      }
+      // remove trailing slash
+      return url.replace(/\/+$/,'');
+    }
+
+    function getSiteUrlInput(){
+      var v = $.trim($('#siteUrl').val());
+      if(!v){
+        if(typeof _spPageContextInfo !== 'undefined' && _spPageContextInfo.webAbsoluteUrl) return normalizeSiteUrl(_spPageContextInfo.webAbsoluteUrl);
+        return normalizeSiteUrl(window.location.origin + window.location.pathname);
+      }
+      return normalizeSiteUrl(v);
+    }
+
+    function showLoading(on){
+      loadInProgress = !!on;
+      if(on){
+        $('#btnLoad').prop('disabled', true).text('Lädt...');
+      } else {
+        $('#btnLoad').prop('disabled', false).text('Laden');
+      }
+    }
+
+    function mapTemplateToLabel(t){
+      t = parseInt(t,10) || 0;
+      switch(t){
+        case 100: return 'Custom List';
+        case 101: return 'Document Library';
+        case 102: return 'Survey';
+        case 106: return 'Discussion';
+        case 109: return 'Calendar';
+        case 119: return 'External List';
+        default: return 'Andere ('+t+')';
+      }
+    }
+
+    function escapeHtml(s){
+      if(s === undefined || s === null) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function buildListUrl(siteUrl, list){
+      // siteUrl is expected normalized (no /SitePages/...)
+      if(list.defaultViewUrl){
+        if(list.defaultViewUrl.indexOf('http') === 0) return list.defaultViewUrl;
+        return siteUrl.replace(/\/$/,'') + '/' + list.defaultViewUrl.replace(/^\//,'');
+      }
+      return siteUrl.replace(/\/$/,'') + '/Lists/' + encodeURIComponent(list.title) + '/AllItems.aspx';
+    }
+
+    // ----- load via JSOM -----
+    function loadLists(siteUrl){
+      if(loadInProgress) return;
+      var normalized = normalizeSiteUrl(siteUrl);
+      // ensure input shows normalized URL
+      $('#siteUrl').val(normalized);
+      showLoading(true);
+      resetView();
+      allRows = []; filteredRows = []; currentSiteUrl = normalized; currentPage = 1;
+
+      try {
+        var ctx = new SP.ClientContext(normalized);
+        var web = ctx.get_web();
+        var lists = web.get_lists();
+        ctx.load(lists, 'Include(Title, Id, Hidden, DefaultViewUrl, RootFolder, BaseTemplate)');
+        ctx.executeQueryAsync(function(){
+          var e = lists.getEnumerator();
+          while(e.moveNext()){
+            var l = e.get_current();
+            allRows.push({
+              id: l.get_id().toString(),
+              title: l.get_title(),
+              hidden: !!l.get_hidden(),
+              defaultViewUrl: (typeof l.get_defaultViewUrl === 'function' ? l.get_defaultViewUrl() : ''),
+              baseTemplate: (typeof l.get_baseTemplate === 'function' ? l.get_baseTemplate() : (l.get_baseTemplate || 0))
+            });
+          }
+          applyFilters();
+          showLoading(false);
+        }, function(sender,args){
+          showLoading(false);
+          showNoResults('Fehler beim Laden: ' + args.get_message());
+        });
+      } catch(err){
+        showLoading(false);
+        showNoResults('Ausnahme: '+ (err.message || err));
+      }
+    }
+
+    // ----- render / filter / paging -----
+    function resetView(){
+      $('#listsTable').hide();
+      $('#noResults').hide();
+      $('#pager').hide();
+      $('#listsTable tbody').empty();
+    }
+
+    function showNoResults(msg){
+      $('#listsTable').hide();
+      $('#noResultsText').text(msg || 'Keine Listen gefunden.');
+      $('#noResults').show();
+    }
+
+    function applyFilters(){
+      var hiddenFilter = $('#filterHidden').val();
+      var typeFilter = $('#filterType').val();
+      var search = $.trim($('#searchName').val()).toLowerCase();
+      pageSize = parseInt($('#pageSize').val(),10) || 50;
+
+      filteredRows = allRows.filter(function(r){
+        if(hiddenFilter === 'visible' && r.hidden) return false;
+        if(hiddenFilter === 'hidden' && !r.hidden) return false;
+        if(typeFilter !== 'all'){
+          if(typeFilter === 'other'){
+            if([100,101,102,106,109,119].indexOf(parseInt(r.baseTemplate,10)) >= 0) return false;
+          } else {
+            if(parseInt(typeFilter,10) !== parseInt(r.baseTemplate,10)) return false;
+          }
+        }
+        if(search){
+          if((r.title||'').toLowerCase().indexOf(search) === -1 && (r.id||'').toLowerCase().indexOf(search) === -1) return false;
+        }
+        return true;
+      });
+
+      var totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      if(currentPage > totalPages) currentPage = totalPages;
+      renderPage();
+    }
+
+    function renderPage(){
+      var $tbody = $('#listsTable tbody');
+      $tbody.empty();
+
+      if(!filteredRows || filteredRows.length === 0){
+        showNoResults('Keine Listen gefunden.');
+        return;
+      }
+
+      var total = filteredRows.length;
+      var totalPages = Math.max(1, Math.ceil(total / pageSize));
+      var start = (currentPage-1) * pageSize;
+      var end = Math.min(start + pageSize, total);
+      for(var i=start;i<end;i++){
+        var r = filteredRows[i];
+        var listUrl = buildListUrl(currentSiteUrl, r);
+        var typeLabel = mapTemplateToLabel(r.baseTemplate);
+        var visible = r.hidden ? '<span class="status-no">Nein</span>' : '<span class="status-yes">Ja</span>';
+        var settingsUrl = currentSiteUrl.replace(/\/$/,'') + '/_layouts/15/listedit.aspx?List=' + encodeURIComponent(r.id);
+
+        var row = '<tr data-listid="'+ r.id +'" data-siteurl="'+ encodeURIComponent(currentSiteUrl) +'">' +
+                    '<td><input class="rowSelect" type="checkbox" aria-label="Liste auswählen" /></td>' +
+                    '<td><a class="name-link" href="'+ escapeHtml(listUrl) +'" target="_blank" rel="noopener">'+ escapeHtml(r.title) +'</a></td>' +
+                    '<td class="guid">'+ escapeHtml(r.id) +'</td>' +
+                    '<td>'+ visible +'</td>' +
+                    '<td><span class="pill">'+ escapeHtml(typeLabel) +'</span></td>' +
+                    '<td class="actions">' +
+                      '<button class="action-btn small btn-toggle" title="Ein-/Ausblenden">'+ (r.hidden ? 'Einblenden' : 'Ausblenden') +'</button>' +
+                      '<button class="action-btn copy small btn-copy" title="GUID kopieren">GUID</button>' +
+                      '<a class="action-btn small" target="_blank" rel="noopener" href="'+ escapeHtml(settingsUrl) +'" title="Einstellungen öffnen">Einstellungen</a>' +
+                    '</td>' +
+                  '</tr>';
+        $tbody.append(row);
+      }
+
+      $('#listsTable').show();
+      $('#noResults').hide();
+      $('#pager').show();
+      $('#pageInfo').text('Seite ' + currentPage + ' / ' + totalPages + ' — Einträge ' + (start+1) + '-' + end + ' von ' + total);
+      $('#selectAll').prop('checked', false);
+    }
+
+    // ----- clipboard -----
+    function copyToClipboard(text){
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise(function(resolve,reject){
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if(ok) resolve();
+          else reject('Kopieren nicht möglich');
+        } catch(e){ reject(e); }
+      });
+    }
+
+    // ----- JSOM toggle functions -----
+    function toggleVisibilitySingle(siteUrl, listId, makeHidden){
+      return new Promise(function(resolve,reject){
+        try {
+          var ctx = new SP.ClientContext(siteUrl);
+          var list = ctx.get_web().get_lists().getById(listId);
+          list.set_hidden(!!makeHidden);
+          list.update();
+          ctx.executeQueryAsync(function(){ resolve(); }, function(s,a){ reject(a.get_message()); });
+        } catch(e){ reject(e.message || e); }
+      });
+    }
+
+    function bulkToggleVisibility(siteUrl, listIds, makeHidden){
+      return new Promise(function(resolve,reject){
+        try {
+          var ctx = new SP.ClientContext(siteUrl);
+          var lists = ctx.get_web().get_lists();
+          for(var i=0;i<listIds.length;i++){
+            var l = lists.getById(listIds[i]);
+            l.set_hidden(!!makeHidden);
+            l.update();
+          }
+          ctx.executeQueryAsync(function(){ resolve(); }, function(s,a){ reject(a.get_message()); });
+        } catch(e){ reject(e.message || e); }
+      });
+    }
+
+    // ----- events -----
+    $('#btnLoad').on('click', function(){ var site = getSiteUrlInput(); loadLists(site); });
+    $('#siteUrl').on('keypress', function(e){ if(e.which===13){ e.preventDefault(); $('#btnLoad').click(); }});
+    $('#filterHidden, #filterType, #pageSize').on('change', function(){ applyFilters(); });
+    $('#searchName').on('input', function(){ clearTimeout($(this).data('timer')); var t=setTimeout(applyFilters,300); $(this).data('timer',t); });
+
+    // pagination
+    $('#firstPage').on('click', function(){ currentPage = 1; renderPage(); });
+    $('#prevPage').on('click', function(){ if(currentPage>1) currentPage--; renderPage(); });
+    $('#nextPage').on('click', function(){ var tp = Math.max(1, Math.ceil(filteredRows.length / pageSize)); if(currentPage<tp) currentPage++; renderPage(); });
+    $('#lastPage').on('click', function(){ currentPage = Math.max(1, Math.ceil(filteredRows.length / pageSize)); renderPage(); });
+
+    // select all
+    $(document).on('change', '#selectAll', function(){ var checked = $(this).prop('checked'); $('#listsTable tbody .rowSelect').prop('checked', checked); });
+
+    // copy single GUID
+    $(document).on('click', '.btn-copy', function(){
+      var $btn = $(this);
+      var $row = $btn.closest('tr');
+      var guid = $row.data('listid') || $row.find('.guid').text();
+      $btn.prop('disabled', true).text('Kopiere...');
+      copyToClipboard(guid).then(function(){ $btn.text('Kopiert ✓'); setTimeout(function(){ $btn.prop('disabled',false).text('GUID'); },1400); })
+        .catch(function(e){ alert('Fehler: '+e); $btn.prop('disabled',false).text('GUID'); });
+    });
+
+    // toggle single
+    $(document).on('click', '.btn-toggle', function(){
+      var $btn = $(this), $row = $btn.closest('tr');
+      var id = $row.data('listid'), site = decodeURIComponent($row.data('siteurl') || currentSiteUrl);
+      var action = $.trim($btn.text()).toLowerCase();
+      var makeHidden = (action.indexOf('ausblend') !== -1);
+      if(!confirm(makeHidden ? 'Liste wirklich ausblenden?' : 'Liste wirklich einblenden?')) return;
+      $btn.prop('disabled', true).text('Bitte warten...');
+      toggleVisibilitySingle(site, id, makeHidden).then(function(){
+        // update local model
+        for(var i=0;i<allRows.length;i++){ if(allRows[i].id === id){ allRows[i].hidden = !!makeHidden; break; } }
+        applyFilters();
+      }).catch(function(e){ alert('Fehler: '+e); }).finally(function(){ $btn.prop('disabled',false); $btn.text(makeHidden ? 'Einblenden' : 'Ausblenden'); });
+    });
+
+    // bulk actions (operate grouped by site)
+    function getSelectedBySite(){
+      var map = {};
+      $('#listsTable tbody tr').each(function(){
+        var $r = $(this);
+        if(!$r.find('.rowSelect').prop('checked')) return;
+        var id = $r.data('listid');
+        var site = decodeURIComponent($r.data('siteurl') || currentSiteUrl);
+        if(!map[site]) map[site] = [];
+        map[site].push(id);
+      });
+      return map;
+    }
+
+    $('#btnBulkShow').on('click', function(){
+      var map = getSelectedBySite(); var keys = Object.keys(map);
+      if(!keys.length){ alert('Keine Listen ausgewählt.'); return; }
+      if(!confirm('Ausgewählte Listen einblenden (Hidden=false)?')) return;
+      performBulk(map, false);
+    });
+
+    $('#btnBulkHide').on('click', function(){
+      var map = getSelectedBySite(); var keys = Object.keys(map);
+      if(!keys.length){ alert('Keine Listen ausgewählt.'); return; }
+      if(!confirm('Ausgewählte Listen ausblenden (Hidden=true)?')) return;
+      performBulk(map, true);
+    });
+
+    function performBulk(map, makeHidden){
+      showLoading(true);
+      var tasks = [];
+      for(var site in map){
+        if(!map.hasOwnProperty(site)) continue;
+        tasks.push(bulkToggleVisibility(site, map[site], makeHidden).then(function(){}, function(err){ throw {site:site, message:err}; }));
+      }
+      Promise.all(tasks).then(function(){
+        // update local rows
+        for(var site in map){
+          var ids = map[site];
+          for(var i=0;i<ids.length;i++){
+            for(var j=0;j<allRows.length;j++){
+              if(allRows[j].id === ids[i]) allRows[j].hidden = !!makeHidden;
+            }
+          }
+        }
+        applyFilters();
+        showLoading(false);
+        alert('Bulk-Aktion erfolgreich.');
+      }).catch(function(err){
+        showLoading(false);
+        alert('Fehler bei Bulk-Aktion: ' + (err.message || JSON.stringify(err)));
+      });
+    }
+
+    // keyboard: enter in search triggers filter instantly
+    $('#searchName').on('keypress', function(e){ if(e.which===13){ e.preventDefault(); applyFilters(); }});
+
+    // initial state: nothing auto-loaded; user clicks Laden
+  })(jQuery);
+  </script>
+</body>
+</html>

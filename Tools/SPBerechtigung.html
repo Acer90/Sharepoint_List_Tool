@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <title>SP Berechtigungs-Tool</title>
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/Tools/SPBerechtigung.css" />
+
+    <!-- Hinweis: jQuery, jsPDF und html2canvas sollten geladen werden, falls Du den PDF-Export brauchst.
+         Wenn nicht vorhanden, bitte in Deinem Host-Page-Head einbinden. -->
+</head>
+<body>
+    <div id="s6-tool-wrapper">
+        <h2>SharePoint Berechtigungs-Struktur (Rekursiv)</h2>
+
+        <div class="s6-header">
+            <div id="s6UrlLabelRow">
+                <label id="s6UrlLabel" for="s6UrlInput">Site URL:</label>
+                <button id="s6AddUrlBtn" class="s6-btn s6-btn-sm">URL hinzufügen</button>
+                <button id="btnFetchSubsites" class="s6-btn s6-btn-sm">Untergeordnete Seiten abrufen</button>
+            </div>
+
+            <div id="s6UrlList">
+                <div class="s6-url-row">
+                    <input id="s6UrlInput" class="s6-url-input" placeholder="https://..." />
+                </div>
+            </div>
+
+            <button id="btnStartLoad" class="s6-btn s6-btn-primary">Analyse Starten</button>
+        </div>
+
+        <div id="s6LoadingArea" style="display:none;">
+            <div id="s6LoadingText">Bereit.</div>
+            <div class="s6-progress-track"><div id="s6ProgressBar" class="s6-progress-fill"></div></div>
+        </div>
+
+        <!-- Ergebnisse standardmäßig ausgeblendet -->
+        <div id="s6ResultsArea" style="display:none;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <h3>Aktive Benutzer (Übersicht)</h3>
+                <div>
+                    <button id="s6DeleteSelectedBtn" class="s6-btn s6-btn-danger s6-btn-sm" title="Markierte Benutzer löschen">Ausgewählte löschen</button>
+                </div>
+            </div>
+
+            <table id="s6UserTable" class="s6-table">
+                <thead>
+                    <tr>
+                        <th style="width:36px;"><input id="s6UserTableSelectAll" type="checkbox" title="Alle auswählen" /></th>
+                        <th>Name</th>
+                        <th>PersNr / Login</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <!-- Header über dem Baum mit Export-Button -->
+            <div id="s6TreeHeader" class="s6-tree-header" style="display:flex; align-items:center; gap:10px; margin-top:16px;">
+                <h3 style="margin:0;">Berechtigungs-Baum</h3>
+                <button id="s6ExportPdfBtn" class="s6-btn s6-btn-copy s6-btn-sm" title="Berechtigungsbaum als PDF exportieren">Als PDF exportieren</button>
+                <button id="s6ExpandCollapseBtn" class="s6-btn s6-btn-sm" title="Baum auf-/zuklappen">Baum aufklappen</button>
+            </div>
+
+            <div class="s6-tree-container" style="margin-top:10px;">
+                <ul id="s6TreeRoot" class="s6-tree"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/Tools/SPBerechtigung.js"></script>
+</body>
+</html>

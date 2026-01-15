@@ -1,0 +1,262 @@
+:root {
+  --dp-primary: #a50058;
+  --dp-primary-light: #f5e1ee;
+  --dp-accent: #ffc000;
+  --dp-bg: #ffffff;
+  --dp-header-bg: #3f3f3f;
+  --dp-text: #333333;
+  --dp-border: #e0e0e0;
+  --dp-danger: #ff4d4d;
+}
+
+.dienstplan-app {
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--dp-bg);
+  color: var(--dp-text);
+  border-radius: 6px 6px 0 0;
+  border-top: 4px solid var(--dp-accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding-bottom: 16px;
+}
+
+/* Header und Tabs */
+
+.dp-header {
+  background: var(--dp-header-bg);
+  color: #ffffff;
+  padding: 12px 24px 0 24px;
+  border-radius: 6px 6px 0 0;
+}
+
+.dp-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.dp-tabs {
+  display: flex;
+  gap: 24px;
+}
+
+.dp-tab {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  padding: 8px 0;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dp-tab:hover {
+  border-bottom-color: rgba(255,255,255,0.4);
+}
+
+.dp-tab-active {
+  border-bottom-color: var(--dp-primary);
+  font-weight: 600;
+}
+
+.dp-tab-lock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Filterzeile */
+
+.dp-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 24px 8px 24px;
+  border-bottom: 1px solid var(--dp-border);
+}
+
+.dp-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.dp-filter-group label {
+  font-size: 12px;
+  color: #666666;
+}
+
+.dp-filter-group input[type="date"],
+.dp-filter-group select {
+  padding: 6px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--dp-border);
+  font-size: 13px;
+  min-height: 32px;
+}
+
+.dp-filter-right {
+  margin-left: auto;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.dp-nav-btn {
+  margin-left: 4px;
+  margin-right: 4px;
+  border: 1px solid var(--dp-border);
+  background: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.dp-nav-btn:hover {
+  background: #eaeaea;
+}
+
+#dp-current-month-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Tabelle */
+
+.dp-table-wrapper {
+  overflow-x: auto;
+  padding: 0 24px 8px 24px;
+}
+
+.dp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dp-table thead {
+  border-bottom: 2px solid var(--dp-border);
+}
+
+.dp-table thead th {
+  text-align: left;
+  padding: 8px 8px;
+  color: #666666;
+  font-weight: 600;
+}
+
+.dp-table tbody tr {
+  border-bottom: 1px solid var(--dp-border);
+}
+
+.dp-table tbody tr:nth-child(2n) {
+  background: #fafafa;
+}
+
+.dp-table td {
+  padding: 8px 8px;
+}
+
+/* Hervorhebungen für Wochenenden/Feiertage */
+
+.dp-row-weekend {
+  background: #fff8e6;
+}
+
+.dp-row-holiday {
+  background: #ffe9e9;
+}
+
+.dp-row-special-date {
+  background: #e9f5ff;
+}
+
+.dp-date-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.dp-date-label .dp-weekday {
+  font-weight: 500;
+}
+
+.dp-date-label .dp-date-string {
+  font-size: 12px;
+  color: #666666;
+}
+
+/* Buttons */
+
+.dp-btn-primary,
+.dp-table .dp-btn-primary {
+  background: var(--dp-primary);
+  color: #ffffff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dp-btn-primary:hover {
+  background: #7c0042;
+}
+
+.dp-btn-secondary {
+  background: #f3f2f1;
+  color: #323130;
+  border: 1px solid #c8c6c4;
+  padding: 6px 12px;
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dp-btn-secondary:hover {
+  background: #e1dfdd;
+}
+
+.dp-btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Konfigurationspanel */
+
+.dp-config-panel {
+  border-top: 2px solid var(--dp-border);
+  margin: 8px 24px 0 24px;
+  padding-top: 12px;
+}
+
+.dp-status-msg {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #666666;
+}
+
+/* Kleine Helfer */
+
+.dp-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  background: #f3f2f1;
+  color: #323130;
+}
+
+.dp-tag-open {
+  background: #fff4ce;
+  color: #8a6d00;
+}
+
+.dp-tag-taken {
+  background: #dff6dd;
+  color: #0b6a0b;
+}
+
+.dp-tag-internal {
+  background: #e1e1f8;
+  color: #32318f;
+}

@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>SharePoint Benachrichtigungs-Manager</title>
+
+    <!-- SharePoint JSOM einbinden -->
+    <script type="text/javascript" src="/_layouts/15/sp.js"></script>
+    <script type="text/javascript" src="/_layouts/15/sp.runtime.js"></script>
+
+    <style>
+        /* Modernes Card-Design, ohne body zu stylen */
+        #aboManagerOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #aboManagerDialog {
+            background: #ffffff;
+            border-radius: 10px;
+            min-width: 640px;
+            max-width: 960px;
+            max-height: 80vh;
+            box-shadow:
+                0 14px 28px rgba(0,0,0,0.25),
+                0 10px 10px rgba(0,0,0,0.22);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 13px;
+        }
+        .abo-dialog-header {
+            padding: 12px 18px;
+            background: linear-gradient(135deg, #b41069, #e7388f);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .abo-dialog-header-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .abo-dialog-header-actions button {
+            border: none;
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+        }
+        .abo-dialog-header-actions button:hover {
+            background: rgba(255,255,255,0.12);
+            border-radius: 4px;
+        }
+
+        .abo-dialog-content {
+            padding: 16px 18px 18px 18px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        .abo-info {
+            margin-bottom: 10px;
+            color: #555;
+            font-size: 12px;
+        }
+
+        .abo-table-wrapper {
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        #aboManagerDialog table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #aboManagerDialog thead {
+            background: #f6f3f5;
+        }
+        #aboManagerDialog th,
+        #aboManagerDialog td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: left;
+            vertical-align: top;
+        }
+        #aboManagerDialog th {
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #555;
+        }
+        #aboManagerDialog tbody tr:hover {
+            background: #faf7fb;
+        }
+
+        .abo-tag-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .abo-tag-status-on {
+            background: rgba(14, 159, 110, 0.12);
+            color: #0e9f6e;
+        }
+        .abo-tag-status-off {
+            background: rgba(120, 120, 120, 0.12);
+            color: #555;
+        }
+
+        .abo-perm-ok {
+            color: #0e9f6e;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        .abo-perm-bad {
+            color: #d13438;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        .abo-perm-loading {
+            color: #777;
+            font-style: italic;
+            font-size: 12px;
+        }
+
+        .abo-frequency-group {
+            font-size: 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .abo-frequency-group label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .abo-frequency-group input[type="radio"] {
+            accent-color: #b41069;
+        }
+
+        .abo-primary-btn,
+        .abo-secondary-btn,
+        .abo-outlook-btn {
+            font-family: inherit;
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .abo-primary-btn {
+            background: #b41069;
+            color: #fff;
+        }
+        .abo-primary-btn:hover:not(:disabled) {
+            background: #951057;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+        .abo-primary-btn:disabled {
+            opacity: 0.5;
+            cursor: default;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .abo-secondary-btn {
+            background: #ffffff;
+            color: #b41069;
+            border: 1px solid rgba(180, 16, 105, 0.4);
+        }
+        .abo-secondary-btn:hover:not(:disabled) {
+            background: rgba(180,16,105,0.05);
+        }
+
+        .abo-outlook-btn {
+            background: #0072c6;
+            color: #fff;
+            border: none;
+        }
+        .abo-outlook-btn:hover:not(:disabled) {
+            background: #005a9e;
+        }
+
+        .abo-actions {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+
+        /* Wrapper für den Öffnen-Button, damit er mittig steht */
+        .abo-open-wrapper {
+            display: flex;
+            justify-content: center;
+            margin: 0 0;
+        }
+
+        /* Popup-Button: doppelte Höhe (Padding erhöht) */
+        #openAboManagerBtn {
+            background: #b41069;
+            color: #fff;
+            border-radius: 999px;
+            border: none;
+            padding: 12px 16px; /* doppelt so hoch wie vorher */
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+            transition: all 0.15s ease;
+        }
+        #openAboManagerBtn:hover {
+            background: #951057;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+            transform: translateY(-1px);
+        }
+        #openAboManagerBtn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="abo-open-wrapper">
+        <button id="openAboManagerBtn" type="button">
+            Benachrichtigungen verwalten
+        </button>
+    </div>
+
+    <script type="text/javascript">
+        var ABO_DEBUG = true;
+        function aboLog(){ if(ABO_DEBUG && console && console.log){ console.log.apply(console,["[ABO]",new Date().toISOString()].concat([].slice.call(arguments)));}}
+        function aboWarn(){ if(ABO_DEBUG && console && console.warn){ console.warn.apply(console,["[ABO-WARN]",new Date().toISOString()].concat([].slice.call(arguments)));}}
+        function aboError(){ if(console && console.error){ console.error.apply(console,["[ABO-ERROR]",new Date().toISOString()].concat([].slice.call(arguments)));}}
+
+        aboLog("Benachrichtigungs-Manager HTML geladen");
+
+        document.getElementById("openAboManagerBtn").onclick = function () {
+            aboLog("openAboManagerBtn.onclick", "Button geklickt");
+            if (typeof SP !== "undefined" && SP.SOD && SP.SOD.executeFunc) {
+                SP.SOD.executeFunc('sp.js', 'SP.ClientContext', function () {
+                    Abo_Manager_Init();
+                });
+            } else {
+                Abo_Manager_Init();
+            }
+        };
+
+        function Abo_GetClientContext() {
+            return new SP.ClientContext.get_current();
+        }
+
+        function Abo_GetListById(spContext, listId) {
+            var guid = listId;
+            if (guid.indexOf("{") === -1) guid = "{" + guid + "}";
+            return spContext.get_web().get_lists().getById(guid);
+        }
+
+        function Abo_GetFrequencyConstant(freqNumber) {
+            if (freqNumber === 0) return SP.AlertFrequency.immediate;
+            if (freqNumber === 1) return SP.AlertFrequency.daily;
+            if (freqNumber === 2) return SP.AlertFrequency.weekly;
+            return SP.AlertFrequency.daily;
+        }
+        function Abo_FrequencyToLabel(freqNumber){
+            if(freqNumber===0) return "Benachrichtigung sofort";
+            if(freqNumber===1) return "Tägliche Zusammenfassung";
+            if(freqNumber===2) return "Wöchentliche Zusammenfassung";
+            return "Unbekannt";
+        }
+
+        async function Abo_List(site, listId, abo_name, frequencyNumber) {
+            aboLog("Abo_List ENTER", {site, listId, abo_name, frequencyNumber});
+            var ctx = Abo_GetClientContext();
+            var web = ctx.get_web();
+            var user = web.get_currentUser();
+            var alerts = user.get_alerts();
+            var list = Abo_GetListById(ctx, listId);
+
+            ctx.load(user);
+            ctx.load(alerts);
+            ctx.load(list);
+
+            await new Promise(function (res, rej) {
+                ctx.executeQueryAsync(res, function(s,a){aboError("Abo_List load ERROR",a.get_message());rej(a.get_message());});
+            });
+
+            var notify = new SP.AlertCreationInformation();
+            notify.set_title(abo_name);
+            notify.set_alertFrequency(Abo_GetFrequencyConstant(frequencyNumber));
+            notify.set_alertType(SP.AlertType.list);
+            notify.set_list(list);
+            notify.set_deliveryChannels(SP.AlertDeliveryChannel.email);
+            notify.set_alwaysNotify(true);
+            notify.set_status(SP.AlertStatus.on);
+            notify.set_user(user);
+            notify.Filter = '<Query><Where><Neq><FieldRef Name="Editor" /><Value Type="Integer"><UserID /></Value></Neq></Where></Query>';
+            notify.set_eventType(SP.AlertEventType.all);
+
+            alerts.add(notify);
+            user.update();
+
+            await new Promise(function (res, rej) {
+                ctx.executeQueryAsync(res, function(s,a){aboError("Abo_List add ERROR",a.get_message());rej(a.get_message());});
+            });
+
+            aboLog("Abo_List LEAVE");
+        }
+
+        function Abo_GetUserAlerts() {
+            aboLog("Abo_GetUserAlerts ENTER");
+            var ctx = Abo_GetClientContext();
+            var user = ctx.get_web().get_currentUser();
+            var alerts = user.get_alerts();
+            ctx.load(user);
+            ctx.load(alerts);
+
+            return new Promise(function (resolve, reject) {
+                ctx.executeQueryAsync(function () {
+                    var res = [];
+                    var en = alerts.getEnumerator();
+                    while (en.moveNext()) {
+                        var a = en.get_current();
+                        res.push({
+                            id: a.get_id(),
+                            title: a.get_title(),
+                            alertType: a.get_alertType(),
+                            listId: a.get_listId ? a.get_listId().toString() : null,
+                            status: a.get_status(),
+                            eventType: a.get_eventType(),
+                            frequency: a.get_alertFrequency()
+                        });
+                    }
+                    aboLog("Abo_GetUserAlerts built", {count: res.length, alerts: res});
+                    resolve(res);
+                }, function (s,a) {
+                    aboError("Abo_GetUserAlerts ERROR", a.get_message());
+                    reject(a.get_message());
+                });
+            });
+        }
+
+        function Abo_DeleteAlertByTitle(alertTitle) {
+            aboLog("Abo_DeleteAlertByTitle ENTER", {alertTitle});
+            var ctx = Abo_GetClientContext();
+            var user = ctx.get_web().get_currentUser();
+            var alerts = user.get_alerts();
+            ctx.load(user);
+            ctx.load(alerts);
+
+            return new Promise(function (resolve, reject) {
+                ctx.executeQueryAsync(function () {
+                    var en = alerts.getEnumerator();
+                    var foundId = null;
+                    while (en.moveNext()) {
+                        var a = en.get_current();
+                        var currentTitle = a.get_title();
+                        aboLog("Check notification", {currentTitle});
+                        if (currentTitle === alertTitle) {
+                            foundId = a.get_id();
+                            break;
+                        }
+                    }
+                    if (!foundId) {
+                        aboWarn("Abo_DeleteAlertByTitle not found", {alertTitle});
+                        resolve(false);
+                        return;
+                    }
+
+                    aboLog("alerts.deleteAlert", {id: foundId});
+                    alerts.deleteAlert(foundId);
+
+                    ctx.executeQueryAsync(function () {
+                        aboLog("Abo_DeleteAlertByTitle delete SUCCESS");
+                        resolve(true);
+                    }, function (s2,a2) {
+                        aboError("Abo_DeleteAlertByTitle delete ERROR", a2.get_message());
+                        reject(a2.get_message());
+                    });
+                }, function (s,a) {
+                    aboError("Abo_DeleteAlertByTitle load ERROR", a.get_message());
+                    reject(a.get_message());
+                });
+            });
+        }
+
+        function Abo_CheckListPermissions(listId) {
+            var ctx = Abo_GetClientContext();
+            var list = Abo_GetListById(ctx, listId);
+            ctx.load(list, "Title", "Id", "RootFolder");
+            return new Promise(function (resolve) {
+                ctx.executeQueryAsync(function () {
+                    resolve({
+                        listId: list.get_id().toString(),
+                        listTitle: list.get_title(),
+                        listRootUrl: list.get_rootFolder().get_serverRelativeUrl(),
+                        canViewItems: true
+                    });
+                }, function () {
+                    resolve({listId: listId, canViewItems: false});
+                });
+            });
+        }
+
+        async function Abo_Manager_Init() {
+            aboLog("Abo_Manager_Init ENTER");
+            if (typeof _spPageContextInfo !== "undefined") {
+                AboManager_Config.siteUrl = _spPageContextInfo.webAbsoluteUrl;
+            } else {
+                AboManager_Config.siteUrl = window.location.protocol + "//" + window.location.host;
+            }
+            var alerts = await Abo_GetUserAlerts();
+            Abo_Manager_RenderUI(alerts);
+        }
+
+        function Abo_Manager_RenderUI(userAlerts) {
+            aboLog("Abo_Manager_RenderUI ENTER", {userAlertsCount: userAlerts.length});
+
+            var existing = document.getElementById("aboManagerOverlay");
+            if (existing) existing.parentNode.removeChild(existing);
+
+            var overlay = document.createElement("div");
+            overlay.id = "aboManagerOverlay";
+
+            var dialog = document.createElement("div");
+            dialog.id = "aboManagerDialog";
+
+            var header = document.createElement("div");
+            header.className = "abo-dialog-header";
+
+            var titleSpan = document.createElement("span");
+            titleSpan.className = "abo-dialog-header-title";
+            titleSpan.textContent = "Benachrichtigungs-Manager";
+            header.appendChild(titleSpan);
+
+            var headerActions = document.createElement("div");
+            headerActions.className = "abo-dialog-header-actions";
+
+            var closeBtn = document.createElement("button");
+            closeBtn.type = "button";
+            closeBtn.title = "Schließen";
+            closeBtn.innerHTML = "✕";
+            closeBtn.onclick = function () {
+                aboLog("closeBtn.onclick", "Popup schließen");
+                if (overlay && overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            };
+            headerActions.appendChild(closeBtn);
+            header.appendChild(headerActions);
+
+            var content = document.createElement("div");
+            content.className = "abo-dialog-content";
+
+            var info = document.createElement("div");
+            info.className = "abo-info";
+            info.textContent = "Verwalten Sie hier Ihre E-Mail-Benachrichtigungen für vordefinierte Listen. Benachrichtigungen werden nur versendet, wenn andere Benutzer Einträge ändern.";
+            content.appendChild(info);
+
+            var wrapper = document.createElement("div");
+            wrapper.className = "abo-table-wrapper";
+
+            var table = document.createElement("table");
+            table.innerHTML = "<thead><tr>"
+                + "<th>Liste</th>"
+                + "<th>Beschreibung</th>"
+                + "<th>Frequenz</th>"
+                + "<th>Bereich</th>"
+                + "<th>Status</th>"
+                + "<th>Aktion</th>"
+                + "</tr></thead><tbody></tbody>";
+            var tbody = table.querySelector("tbody");
+
+            AboManager_Config.lists.forEach(function (cfgList, index) {
+                var tr = document.createElement("tr");
+
+                var tdTitle = document.createElement("td");
+                tdTitle.textContent = cfgList.title;
+
+                var tdDesc = document.createElement("td");
+                tdDesc.textContent = cfgList.description || "";
+
+                var tdFreq = document.createElement("td");
+                tdFreq.className = "abo-freq-cell";
+
+                var tdPerm = document.createElement("td");
+                tdPerm.textContent = "Prüfe...";
+                tdPerm.className = "abo-perm-loading";
+
+                var tdStatus = document.createElement("td");
+                var statusSpan = document.createElement("span");
+                statusSpan.className = "abo-tag-status abo-tag-status-off";
+                statusSpan.textContent = "Lädt...";
+                tdStatus.appendChild(statusSpan);
+
+                var tdAction = document.createElement("td");
+                var actionsDiv = document.createElement("div");
+                actionsDiv.className = "abo-actions";
+
+                var btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "abo-primary-btn";
+                btn.textContent = "Lade...";
+                btn.disabled = true;
+                actionsDiv.appendChild(btn);
+
+                var outlookBtn = null;
+                if (cfgList.isCalendar) {
+                    outlookBtn = document.createElement("button");
+                    outlookBtn.type = "button";
+                    outlookBtn.className = "abo-outlook-btn";
+                    outlookBtn.textContent = "Outlook";
+                    outlookBtn.disabled = false;
+                    actionsDiv.appendChild(outlookBtn);
+                }
+
+                tdAction.appendChild(actionsDiv);
+
+                tr.appendChild(tdTitle);
+                tr.appendChild(tdDesc);
+                tr.appendChild(tdFreq);
+                tr.appendChild(tdPerm);
+                tr.appendChild(tdStatus);
+                tr.appendChild(tdAction);
+
+                tbody.appendChild(tr);
+
+                (function (cfg, permCell, freqCell, statusBadge, button, rowIndex, outlookButton) {
+                    var expectedTitle = "Benachrichtigung: " + cfg.title;
+                    aboLog("Row init", {rowIndex, expectedTitle});
+
+                    Abo_CheckListPermissions(cfg.listId)
+                        .then(function (perm) {
+                            if (perm.canViewItems) {
+                                permCell.textContent = "Zugriff OK";
+                                permCell.className = "abo-perm-ok";
+                            } else {
+                                permCell.textContent = "Kein Zugriff / Liste nicht gefunden";
+                                permCell.className = "abo-perm-bad";
+                            }
+
+                            if (outlookButton && perm.canViewItems) {
+                                outlookButton.onclick = function () {
+                                    aboLog("Outlook-Button CLICK", {
+                                        rowIndex,
+                                        listId: cfg.listId,
+                                        listRootUrl: perm.listRootUrl
+                                    });
+
+                                    var baseUrl = AboManager_Config.siteUrl.replace(/\/+$/,''); // ohne trailing slash
+                                    var listUrl = perm.listRootUrl || "";
+                                    var guid = cfg.listId.indexOf("{") === 0 ? cfg.listId : "{" + cfg.listId + "}";
+                                    var siteName = encodeURIComponent(document.title || "SharePoint-Site");
+                                    var listName = encodeURIComponent(cfg.title);
+
+                                    var full = "stssync://sts/"
+                                        + "?ver=1.0"
+                                        + "&type=calendar"
+                                        + "&cmd=add-folder"
+                                        + "&base-url=" + encodeURIComponent(baseUrl)
+                                        + "&guid=" + encodeURIComponent(guid)
+                                        + "&site-name=" + siteName
+                                        + "&list-name=" + listName
+                                        + "&list-url=" + encodeURIComponent(listUrl)
+                                        + "&user-id="; // optional leer
+
+                                    aboLog("Outlook stssync URL", full);
+                                    window.location.href = full;
+                                };
+                            }
+                        });
+
+                    var existingAlert = userAlerts.find(function (a) {
+                        return a.title && a.title.toLowerCase() === expectedTitle.toLowerCase();
+                    });
+
+                    button.onclick = null;
+
+                    if (existingAlert) {
+                        statusBadge.textContent = "Abonniert";
+                        statusBadge.className = "abo-tag-status abo-tag-status-on";
+                        button.textContent = "Abbestellen";
+                        button.className = "abo-secondary-btn";
+                        button.disabled = false;
+
+                        var freqLabel = Abo_FrequencyToLabel(existingAlert.frequency);
+                        freqCell.textContent = freqLabel;
+
+                        button.onclick = function () {
+                            aboLog("Abbestellen-Button CLICK", {rowIndex, expectedTitle});
+                            button.disabled = true;
+                            Abo_DeleteAlertByTitle(expectedTitle)
+                                .then(function (ok) {
+                                    aboLog("Abo_DeleteAlertByTitle result", {ok});
+                                    if (ok) {
+                                        statusBadge.textContent = "Nicht abonniert";
+                                        statusBadge.className = "abo-tag-status abo-tag-status-off";
+                                        button.textContent = "Abonnieren";
+                                        button.className = "abo-primary-btn";
+                                        button.disabled = false;
+
+                                        renderFrequencySelector(freqCell, rowIndex, cfg, button, statusBadge);
+                                    } else {
+                                        alert("Benachrichtigung konnte nicht gefunden werden.");
+                                        button.disabled = false;
+                                    }
+                                })
+                                .catch(function (err) {
+                                    aboError("Abo_DeleteAlertByTitle catch", err);
+                                    alert("Fehler beim Löschen der Benachrichtigung: " + err);
+                                    button.disabled = false;
+                                });
+                        };
+                    } else {
+                        statusBadge.textContent = "Nicht abonniert";
+                        statusBadge.className = "abo-tag-status abo-tag-status-off";
+                        button.textContent = "Abonnieren";
+                        button.className = "abo-primary-btn";
+                        button.disabled = false;
+
+                        renderFrequencySelector(freqCell, rowIndex, cfg, button, statusBadge);
+                    }
+                })(cfgList, tdPerm, tdFreq, statusSpan, btn, index, outlookBtn);
+            });
+
+            wrapper.appendChild(table);
+            content.appendChild(wrapper);
+            dialog.appendChild(header);
+            dialog.appendChild(content);
+            overlay.appendChild(dialog);
+
+            document.body.appendChild(overlay);
+            aboLog("Abo_Manager_RenderUI LEAVE");
+        }
+
+        function renderFrequencySelector(freqCell, rowIndex, cfg, button, statusBadge) {
+            freqCell.innerHTML = "";
+            var freqDiv = document.createElement("div");
+            freqDiv.className = "abo-frequency-group";
+            freqDiv.innerHTML =
+                '<label><input type="radio" name="freq_' + rowIndex + '" value="0"> Benachrichtigung sofort</label>' +
+                '<label><input type="radio" name="freq_' + rowIndex + '" value="1" checked> Tägliche Zusammenfassung</label>' +
+                '<label><input type="radio" name="freq_' + rowIndex + '" value="2"> Wöchentliche Zusammenfassung</label>';
+            freqCell.appendChild(freqDiv);
+
+            function getSelectedFrequencyNumber() {
+                var radios = freqDiv.querySelectorAll('input[type="radio"]');
+                for (var i = 0; i < radios.length; i++) {
+                    if (radios[i].checked) return parseInt(radios[i].value, 10);
+                }
+                return 1;
+            }
+
+            button.onclick = function () {
+                var freqNumber = getSelectedFrequencyNumber();
+                aboLog("Abonnieren-Button CLICK", {rowIndex, freqNumber});
+                button.disabled = true;
+                var expectedTitle = "Benachrichtigung: " + cfg.title;
+                Abo_List(AboManager_Config.siteUrl, cfg.listId, expectedTitle, freqNumber)
+                    .then(function () {
+                        statusBadge.textContent = "Abonniert";
+                        statusBadge.className = "abo-tag-status abo-tag-status-on";
+                        button.textContent = "Abbestellen";
+                        button.className = "abo-secondary-btn";
+                        button.disabled = false;
+
+                        freqCell.innerHTML = "";
+                        freqCell.textContent = Abo_FrequencyToLabel(freqNumber);
+
+                        button.onclick = function () {
+                            aboLog("Abbestellen-Button CLICK (nach Neu-Abo)", {rowIndex, expectedTitle});
+                            button.disabled = true;
+                            Abo_DeleteAlertByTitle(expectedTitle)
+                                .then(function (ok) {
+                                    aboLog("Abo_DeleteAlertByTitle result", {ok});
+                                    if (ok) {
+                                        statusBadge.textContent = "Nicht abonniert";
+                                        statusBadge.className = "abo-tag-status abo-tag-status-off";
+                                        button.textContent = "Abonnieren";
+                                        button.className = "abo-primary-btn";
+                                        button.disabled = false;
+
+                                        renderFrequencySelector(freqCell, rowIndex, cfg, button, statusBadge);
+                                    } else {
+                                        alert("Benachrichtigung konnte nicht gefunden werden.");
+                                        button.disabled = false;
+                                    }
+                                })
+                                .catch(function (err) {
+                                    aboError("Abo_DeleteAlertByTitle catch", err);
+                                    alert("Fehler beim Löschen der Benachrichtigung: " + err);
+                                    button.disabled = false;
+                                });
+                        };
+                    })
+                    .catch(function (err) {
+                        aboError("Abo_List catch", err);
+                        //alert("Fehler beim Anlegen der Benachrichtigung: " + err);
+                        button.disabled = false;
+                    });
+            };
+        }
+    </script>
+</body>
+</html>

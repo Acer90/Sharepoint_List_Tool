@@ -1,0 +1,373 @@
+/* S6Berechtigung.css
+   Änderungen:
+   - Tree-Zeilen: vertikales Abstand/ Padding oben/unten = 1px
+   - Zwischen Buttons im Treeview: gap 5px
+   - Padding rechts in Treeview-Zeilen: immer 6px
+   - Treeview-Buttons immer rechts (mittels margin-left: auto)
+   - Überschriften (h3) in berry (#b41069)
+*/
+
+/* Scoped Wrapper, damit CSS nicht den Rest von SharePoint stört */
+#s6-tool-wrapper {
+    font-family: "Segoe UI", "Segoe", Tahoma, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    color: #333;
+    background-color: #fff;
+    padding: 15px;
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-sizing: border-box;
+}
+
+/* H3 Überschriften in berry */
+#s6-tool-wrapper h2 {
+    border-bottom: 2px solid #0078d4;
+    padding-bottom: 10px;
+    margin-top: 0;
+    color: #333;
+}
+#s6-tool-wrapper h3 {
+    margin-top: 20px;
+    color: #b41069; /* berry */
+    font-size: 16px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+/* Header & URL Inputs */
+.s6-header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+    margin-bottom: 20px;
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+/* Labelzeile für "Site URL:" und den Hinzufügen-Button (oben bündig) */
+#s6UrlLabelRow {
+    display: flex;
+    align-items: flex-start; /* oben bündig */
+    gap: 8px;
+    margin-bottom: 6px;
+}
+#s6UrlLabelRow label {
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+    line-height: 28px; /* optische Ausrichtung mit Input */
+}
+
+/* Container für URL-Zeilen */
+#s6UrlList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+/* Jede URL-Zeile */
+.s6-url-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start; /* oben bündig */
+}
+
+/* Einheitliche Gestaltung für alle URL-Eingabefelder (Basis und zusätzliche) */
+#s6UrlInput,
+.s6-url-input {
+    flex: 1;
+    min-width: 280px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;         /* gleiche Ecken wie Buttons */
+    background-color: #fff;
+    font-size: 13px;
+    line-height: 22px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+#s6UrlInput::placeholder,
+.s6-url-input::placeholder {
+    color: #999;
+}
+#s6UrlInput:focus,
+.s6-url-input:focus {
+    border-color: #69afe5;
+    box-shadow: 0 0 0 2px rgba(105,175,229,0.2);
+}
+
+/* ---------------------------------------------------------------------
+   Button-Styling:
+   - Standardfarbe für alle s6-Buttons: berry (#b41069)
+   - Hover leicht dunkler
+   - Ausnahme: Lösch- und Zurücksetzen-Buttons sind rot (#d13438)
+   --------------------------------------------------------------------- */
+
+/* Buttons: alle Buttons im Tool gleich gestalten (Form + Größe) */
+#s6-tool-wrapper button,
+#s6-tool-wrapper .s6-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 6px 12px;
+    cursor: pointer;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 13px;
+    background-color: #b41069; /* berry */
+    border: none;
+    box-shadow: none;
+    transition: background-color 0.18s, transform 0.04s;
+    box-sizing: border-box;
+}
+#s6-tool-wrapper button:hover,
+#s6-tool-wrapper .s6-btn:hover { background-color: #9a0f58; } /* dunkleres berry */
+#s6-tool-wrapper button:active,
+#s6-tool-wrapper .s6-btn:active { transform: translateY(1px); }
+#s6-tool-wrapper button:disabled,
+#s6-tool-wrapper .s6-btn:disabled { cursor: not-allowed; opacity: 0.6; transform:none; }
+
+.s6-btn-primary { background-color: #b41069; }
+.s6-btn-primary:hover { background-color: #9a0f58; }
+
+/* Danger class kept for semantic intent, will be red */
+.s6-btn-danger { background-color: #d13438; }
+.s6-btn-danger:hover { background-color: #a4262c; }
+
+/* Copy button variant (keeps berry but can be overridden if needed) */
+.s6-btn-copy { background-color: #b41069; }
+.s6-btn-copy:hover { background-color: #9a0f58; }
+
+.s6-btn-sm {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+/* Node action small buttons inherit size but spacing is controlled by container */
+.s6-node-action-btn {
+    min-height: 30px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 6px;
+    line-height: 1;
+    background-color: inherit; /* inherit from .s6-btn */
+}
+
+/* Specific: Make delete and reset visually red regardless of other classes.
+   Targets:
+    - .s6-perm-del (permission list delete)
+    - .s6-btn-danger (semantic danger)
+    - .s6-reset-btn (if present)
+*/
+.s6-perm-del,
+.s6-btn-danger,
+.s6-reset-btn,
+button[title*="Löschen"],
+button[title*="Berechtigung entfernen"],
+button[title*="Berechtigung löschen"],
+button[title*="Zurücksetzen"],
+button[title*="Berechtigungen zurücksetzen"] {
+    background-color: #d13438 !important;
+    color: #fff !important;
+}
+.s6-perm-del:hover,
+.s6-btn-danger:hover,
+.s6-reset-btn:hover,
+button[title*="Löschen"]:hover,
+button[title*="Berechtigung entfernen"]:hover,
+button[title*="Zurücksetzen"]:hover {
+    background-color: #a4262c !important;
+}
+
+/* Progress Bar */
+#s6LoadingArea { margin: 15px 0; display: none; }
+.s6-progress-track {
+    background: #eee;
+    height: 8px;
+    width: 100%;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+.s6-progress-fill {
+    background: #b41069; /* progress also using berry for consistency */
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s;
+}
+#s6LoadingText {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Sections & Tables */
+.s6-section { margin-top: 10px; }
+
+.s6-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.s6-table th {
+    background: #f3f3f3;
+    text-align: left;
+    padding: 8px;
+    border-bottom: 2px solid #ddd;
+}
+.s6-table td {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+.s6-table tr:hover { background-color: #f8f8f8; }
+
+/* Tree View */
+.s6-tree-container {
+    border: 1px solid #ddd;
+    padding: 10px;
+    max-height: 600px;
+    overflow-y: auto;
+    background: #fff;
+    box-sizing: border-box;
+}
+ul.s6-tree,
+ul.s6-tree ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+/* Zwischen den <li>-Elementen nur 1px Abstand */
+ul.s6-tree li { margin: 1px 0; }
+
+ul.s6-tree ul {
+    padding-left: 22px;
+    margin-left: 5px;
+    border-left: 1px dashed #ccc;
+    display: none; /* Initial zugeklappt */
+}
+
+/* Node row layout: toggle + icon + title (grows) + actions (right)
+   - vertikales Padding top/bottom = 1px
+   - rechts immer 6px (padding-right)
+*/
+.s6-node-row {
+    display: flex;
+    align-items: center;
+    padding: 1px 6px; /* top/bottom 1px, left/right 6px (right fixed) */
+    border-radius: 3px;
+}
+.s6-node-row:hover { background-color: #f0f0f0; }
+
+/* Toggle area */
+.s6-toggle {
+    cursor: pointer;
+    width: 20px;
+    text-align: center;
+    color: #666;
+    font-weight: bold;
+    user-select: none;
+    flex: 0 0 20px;
+}
+.s6-toggle.hidden { visibility: hidden; }
+.s6-toggle:hover { color: #000; }
+
+/* Icon */
+.s6-icon { margin-right: 6px; font-size: 16px; flex: 0 0 20px; }
+
+/* Title area grows to push actions to the right */
+.s6-node-title {
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1 1 auto;
+    font-size: 13px;
+}
+
+/* Actions container: immer ganz rechts */
+.s6-node-actions {
+    display: flex;
+    gap: 5px;         /* Abstand zwischen Buttons = 5px (wie gewünscht) */
+    align-items: center;
+    margin-left: auto; /* sorgt dafür, dass Aktionen immer rechts stehen */
+    flex: 0 0 auto;
+}
+
+/* Pfad-Spalte ausgeblendet */
+.s6-node-path {
+    display: none;
+}
+
+/* Icons (via pseudo content) */
+.icon-web:before { content: "🌐"; }
+.icon-list:before { content: "📋"; }
+.icon-lib:before { content: "📚"; }
+.icon-folder:before { content: "📁"; }
+.icon-file:before { content: "📄"; }
+
+/* Permissions List Styling: left text + right actions */
+.s6-perm-container {
+    margin-left: 28px;
+    border-top: 1px solid #f0f0f0;
+    margin-bottom: 5px;
+}
+/* Perm items: vertical padding top/bottom = 1px, right padding = 6px */
+.s6-perm-item {
+    display: flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-bottom: 1px dotted #eee;
+    font-size: 12px;
+    gap: 8px;
+}
+/* Left text part grows */
+.s6-perm-text {
+    flex: 1 1 auto;
+    color: #333;
+    font-size: 12px;
+}
+.s6-perm-role { flex: 1; color: #666; }
+
+/* Perm actions on the right, same placement as node actions */
+.s6-perm-actions {
+    display: flex;
+    gap: 5px;          /* Abstand zwischen Perm-Buttons = 5px */
+    align-items: center;
+    margin-left: 12px;
+    flex: 0 0 auto;
+}
+
+/* Perm delete styling minimal — visual driven by .s6-btn and .s6-node-action-btn */
+.s6-perm-del {
+    opacity: 0.95;
+}
+.s6-perm-del:hover { opacity: 1; transform: none; }
+
+/* Expand/Collapse Button (lesbar, Status) */
+#s6ExpandCollapseBtn {
+    padding: 6px 10px;
+    font-size: 14px;
+    border-radius: 4px;
+    background-color: #b41069;
+    color: #fff;
+}
+#s6ExpandCollapseBtn:hover { background-color: #9a0f58; }
+
+/* Tree header (Export + Toggle) spacing: make button gap 5px as well */
+.s6-tree-header { display:flex; align-items:center; gap:5px; }
+
+/* Responsive tweaks */
+@media (max-width: 640px) {
+    .s6-header { padding: 10px; }
+    #s6UrlLabelRow { flex-wrap: wrap; }
+    #s6UrlLabelRow label { width: 100%; line-height: 22px; }
+    #s6AddUrlBtn { margin-top: 6px; }
+    #btnFetchSubsites { margin-top: 6px; }
+    .s6-url-row { flex-direction: column; align-items: stretch; }
+    #btnStartLoad { width: 100%; }
+}

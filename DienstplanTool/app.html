@@ -1,0 +1,2323 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Dienstplan</title>
+
+  <!-- jQuery -->
+  <script src="/_layouts/15/jquery-1.12.4.min.js"></script>
+  <script src="/_layouts/15/sp.runtime.js"></script>
+  <script src="/_layouts/15/sp.js"></script>
+  <script src="/_layouts/15/SP.Core.js"></script>
+
+  <style>
+    :root {
+      --dp-primary: #a50058;
+      --dp-accent: #ffc000;
+      --dp-bg: #ffffff;
+      --dp-header-bg: #3f3f3f;
+      --dp-text: #333333;
+      --dp-border: #e0e0e0;
+    }
+    .dienstplan-app {
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--dp-bg);
+      color: var(--dp-text);
+      border-radius: 6px 6px 0 0;
+      border-top: 4px solid var(--dp-accent);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding-bottom: 16px;
+    }
+    .dp-header {
+      background: var(--dp-header-bg);
+      color: #ffffff;
+      padding: 12px 24px 0 24px;
+      border-radius: 6px 6px 0 0;
+    }
+    .dp-header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .dp-header h1 {
+      margin: 0 0 4px 0;
+      font-size: 20px;
+      font-weight: 500;
+      display: inline-block;
+    }
+    .dp-header-title-suffix {
+      font-size: 20px;
+      opacity: 0.9;
+      margin-left: 6px;
+      font-weight: 500;
+      display: inline-block;
+    }
+    .dp-tabs {
+      display: flex;
+      gap: 24px;
+      margin-top: 8px;
+    }
+    .dp-tab {
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      padding: 8px 0;
+      margin-bottom: -1px;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .dp-tab:hover { border-bottom-color: rgba(255,255,255,0.4); }
+    .dp-tab-active {
+      border-bottom-color: var(--dp-primary);
+      font-weight: 600;
+    }
+
+    .dp-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 16px 24px 8px 24px;
+      border-bottom: 1px solid var(--dp-border);
+      align-items: flex-end;
+    }
+    .dp-filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 160px;
+    }
+    .dp-filter-group label {
+      font-size: 12px;
+      color: #666666;
+    }
+    .dp-filter-group input[type="date"] {
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--dp-border);
+      font-size: 13px;
+      min-height: 32px;
+    }
+
+    .dp-filter-right {
+      margin-left: auto;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+    #dp-current-month-label {
+      font-weight: 600;
+      font-size: 14px;
+      min-width: 140px;
+      text-align: center;
+      color: #201f1e;
+    }
+    .dp-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--dp-primary);
+      background: linear-gradient(135deg, var(--dp-primary), #7c0042);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+    }
+    .dp-nav-btn span {
+      display: inline-block;
+      transform: translateY(-1px);
+    }
+    .dp-nav-btn:hover {
+      background: linear-gradient(135deg, #7c0042, var(--dp-primary));
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      transform: translateY(-1px);
+    }
+    .dp-nav-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .dp-table-wrapper {
+      overflow-x: auto;
+      padding: 0 24px 8px 24px;
+    }
+    .dp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .dp-table thead {
+      border-bottom: 2px solid var(--dp-border);
+    }
+    .dp-table thead th {
+      text-align: left;
+      padding: 8px 8px;
+      color: #666666;
+      font-weight: 600;
+    }
+    .dp-table tbody tr {
+      border-bottom: 1px solid var(--dp-border);
+    }
+    .dp-table tbody tr:nth-child(2n) {
+      background: #fafafa;
+    }
+    .dp-table td { padding: 8px 8px; }
+    .dp-row-weekend { background: #fff8e6; }
+    .dp-row-holiday { background: #ffe9e9; }
+    .dp-row-special-date { background: #e9f5ff; }
+
+    .dp-btn-primary,
+    .dp-btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 12px;
+      border-width: 1px;
+      border-style: solid;
+      cursor: pointer;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .dp-btn-primary {
+      background: var(--dp-primary);
+      color: #ffffff;
+      border-color: var(--dp-primary);
+    }
+    .dp-btn-primary:hover {
+      background: #7c0042;
+      border-color: #7c0042;
+    }
+    .dp-btn-secondary {
+      background: #ffffff;
+      color: var(--dp-primary);
+      border-color: var(--dp-primary);
+    }
+    .dp-btn-secondary:hover {
+      background: #faf5f8;
+    }
+
+    /* Danger-Button im gleichen Stil wie andere Buttons, Farbe beibehalten */
+    .dp-btn-danger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 12px;
+      border-width: 1px;
+      border-style: solid;
+      cursor: pointer;
+      gap: 4px;
+      white-space: nowrap;
+
+      background: #c50f1f;
+      color: #ffffff;
+      border-color: #c50f1f;
+    }
+    .dp-btn-danger:hover {
+      background: #a80000;
+      border-color: #a80000;
+    }
+
+    .dp-btn-disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .dp-config-panel {
+      border-top: 2px solid var(--dp-border);
+      margin: 8px 24px 0 24px;
+      padding-top: 12px;
+    }
+    .dp-status-msg {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #666666;
+    }
+    .dp-storage-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .dp-storage-grid .dp-filter-group {
+      min-width: 220px;
+    }
+    .dp-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      background: #f3f2f1;
+      color: #323130;
+    }
+    .dp-tag-open {
+      background: #fff4ce;
+      color: #8a6d00;
+    }
+    .dp-tag-closed {
+      background: #e1dfdd;
+      color: #3b3a39;
+    }
+
+    .dp-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .dp-modal {
+      background: #ffffff;
+      border-radius: 4px;
+      padding: 16px 20px;
+      max-width: 700px;
+      width: 100%;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .dp-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .dp-modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .dp-modal-close {
+      border: none;
+      background: transparent;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .dp-modal-body {
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+    }
+    .dp-modal-footer { text-align: right; }
+    .dp-dienstgaenger-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .dp-dienstgaenger-table th,
+    .dp-dienstgaenger-table td {
+      border-bottom: 1px solid #e0e0e0;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    .dp-dienstgaenger-selected { background: #f0f8ff; }
+    .dp-link {
+      color: #005a9e;
+      text-decoration: none;
+    }
+    .dp-link:hover { text-decoration: underline; }
+
+    textarea.dp-mail-textarea {
+      width: 100%;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: 3px;
+      border: 1px solid var(--dp-border);
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+
+<div id="dienstplan-container" class="dienstplan-app">
+  <div class="dp-header">
+    <div class="dp-header-top">
+      <div>
+        <h1>
+          Dienstplan
+          <span id="dp-header-service-name" class="dp-header-title-suffix"></span>
+        </h1>
+      </div>
+    </div>
+    <div class="dp-tabs">
+      <!-- werden erst nach Admin-Check eingeblendet -->
+      <button class="dp-tab" data-tab="offen" id="dp-tab-offen" style="display:none;">Offene Dienste</button>
+      <button class="dp-tab dp-tab-active" data-tab="meine" id="dp-tab-meine">Meine Dienste</button>
+      <button class="dp-tab" data-tab="alle" id="dp-tab-alle">Alle Dienste</button>
+      <button class="dp-tab dp-tab-lock" data-tab="intern" id="dp-tab-intern" style="display:none;">🔒 Interner Bereich</button>
+    </div>
+  </div>
+
+  <div class="dp-filters">
+    <div class="dp-filter-group" id="dp-range-from-group" style="display:none;">
+      <label for="dp-from-date">von</label>
+      <input type="date" id="dp-from-date">
+    </div>
+    <div class="dp-filter-group" id="dp-range-to-group" style="display:none;">
+      <label for="dp-to-date">bis</label>
+      <input type="date" id="dp-to-date">
+    </div>
+    <div class="dp-filter-right" style="display:none;">
+      <button id="dp-prev-month" class="dp-nav-btn">
+        <span>&lt;</span><span>Monat</span>
+      </button>
+      <span id="dp-current-month-label"></span>
+      <button id="dp-next-month" class="dp-nav-btn">
+        <span>Monat</span><span>&gt;</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="dp-table-wrapper">
+    <table class="dp-table">
+      <thead>
+      <tr id="dp-header-row">
+        <th>Wochentag</th>
+        <th>Datum</th>
+        <th>Abteilung</th>
+        <th>Dienstgänger</th>
+        <th class="dp-col-aktion">Aktion</th>
+      </tr>
+      </thead>
+      <tbody id="dp-tbody">
+      </tbody>
+    </table>
+  </div>
+
+  <div id="dp-config-panel" class="dp-config-panel" style="display:none;">
+
+    <h2>Datenspeicherung</h2>
+
+    <div class="dp-storage-grid">
+      <div class="dp-filter-group">
+        <button id="dp-open-list-dienste" class="dp-btn-primary" type="button">Liste „Dienste“ öffnen</button>
+      </div>
+      <div class="dp-filter-group">
+        <button id="dp-open-list-config" class="dp-btn-primary" type="button">Liste „DienstplanKonfiguration“ öffnen</button>
+      </div>
+      <div class="dp-filter-group">
+        <button id="dp-open-list-admins" class="dp-btn-primary" type="button">Liste „DienstplanAdmins“ öffnen</button>
+      </div>
+      <div class="dp-filter-group">
+        <button id="dp-open-list-dienstgaenger" class="dp-btn-primary" type="button">Liste „Dienstgaenger“ öffnen</button>
+      </div>
+    </div>
+
+    <button id="dp-create-lists-btn" class="dp-btn-primary">Listen erstellen/aktualisieren</button>
+    <button id="dp-delete-lists-btn" class="dp-btn-danger">Bestehende Listen löschen</button>
+    <div id="dp-create-lists-status" class="dp-status-msg"></div>
+
+    <hr>
+
+    <h3>Einstellungen Dienst</h3>
+    <div class="dp-filter-group">
+      <label for="dp-service-name">Name des Dienstes (z. B. „Bereitschaftsdienst“)</label>
+      <input type="text" id="dp-service-name" placeholder="Name des Dienstes">
+    </div>
+
+    <div class="dp-filter-group" style="margin-top:8px;">
+      <label>Automatisch deaktivieren</label>
+      <label><input type="checkbox" id="dp-disable-saturday"> Samstage deaktivieren</label>
+      <label><input type="checkbox" id="dp-disable-sunday"> Sonntage deaktivieren</label>
+      <div class="dp-status-msg">
+        Deaktivierte Tage werden als <strong>„kein Dienst“</strong> angezeigt.
+      </div>
+    </div>
+
+    <hr>
+
+    <h3>Mailvorlagen verwalten</h3>
+    <p>
+      Platzhalter:
+      <code>{Name}</code>,
+      <code>{Datum}</code>,
+      <code>{Wochentag}</code>,
+      <code>{DienstName}</code>,
+      <code>{SeitenLink}</code>,
+      <code>{Verursacher}</code>
+    </p>
+
+    <div class="dp-filter-group">
+      <label>Vorlage: Neue Zuweisung</label>
+      <textarea id="dp-mail-template-assign" rows="6" class="dp-mail-textarea"></textarea>
+    </div>
+
+    <div class="dp-filter-group">
+      <label>Vorlage: Änderung (alter Dienstgänger)</label>
+      <textarea id="dp-mail-template-change-old" rows="6" class="dp-mail-textarea"></textarea>
+    </div>
+
+    <div class="dp-filter-group">
+      <label>Vorlage: Änderung (neuer Dienstgänger)</label>
+      <textarea id="dp-mail-template-change-new" rows="6" class="dp-mail-textarea"></textarea>
+    </div>
+
+    <div class="dp-filter-group">
+      <label>Vorlage: Storno</label>
+      <textarea id="dp-mail-template-cancel" rows="6" class="dp-mail-textarea"></textarea>
+    </div>
+
+    <button id="dp-save-mail-template-btn" class="dp-btn-secondary">Mailvorlagen &amp; Einstellungen speichern</button>
+    <div id="dp-config-status" class="dp-status-msg"></div>
+
+  </div>
+</div>
+
+<!-- Popup für Neuzuweisung -->
+<div id="dp-modal-backdrop" class="dp-modal-backdrop">
+  <div class="dp-modal">
+    <div class="dp-modal-header">
+      <h3>Dienstgänger auswählen</h3>
+      <button class="dp-modal-close" id="dp-modal-close-btn">&times;</button>
+    </div>
+    <div class="dp-modal-body">
+      <div class="dp-status-msg">
+        Dienst <strong><span id="dp-modal-service-name"></span></strong> am
+        <strong><span id="dp-modal-date-label"></span></strong><br>
+        Nur Dienstgänger aus der Liste <span id="dp-dienstgaenger-list-link"></span> können ausgewählt werden.
+      </div>
+      <table class="dp-dienstgaenger-table" id="dp-dienstgaenger-table">
+        <thead>
+        <tr>
+          <th>Auswahl</th>
+          <th>Dienstgrad</th>
+          <th>Name</th>
+          <th>Abteilung</th>
+          <th>Dienste dieses Jahr</th>
+          <th>Dienste diesen Monat</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="dp-modal-footer">
+      <button id="dp-modal-cancel" class="dp-btn-secondary">Abbrechen</button>
+      <button id="dp-modal-assign" class="dp-btn-primary">Dienst eintragen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Popup für Dienst anpassen / löschen -->
+<div id="dp-edit-modal-backdrop" class="dp-modal-backdrop">
+  <div class="dp-modal">
+    <div class="dp-modal-header">
+      <h3>Dienst anpassen</h3>
+      <button class="dp-modal-close" id="dp-edit-modal-close-btn">&times;</button>
+    </div>
+    <div class="dp-modal-body">
+      <p><strong>Dienst:</strong> <span id="dp-edit-service-name"></span></p>
+      <p><strong>Datum:</strong> <span id="dp-edit-date-label"></span></p>
+      <p><strong>Aktueller Dienstgänger:</strong> <span id="dp-edit-current-dg"></span></p>
+      <div class="dp-status-msg">
+        Wählen Sie einen neuen Dienstgänger oder entfernen Sie den aktuellen Dienstgänger.
+      </div>
+      <table class="dp-dienstgaenger-table" id="dp-edit-dienstgaenger-table">
+        <thead>
+        <tr>
+          <th>Auswahl</th>
+          <th>Dienstgrad</th>
+          <th>Name</th>
+          <th>Abteilung</th>
+          <th>Dienste dieses Jahr</th>
+          <th>Dienste diesen Monat</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="dp-modal-footer">
+      <button id="dp-edit-modal-cancel" class="dp-btn-secondary">Abbrechen</button>
+      <button id="dp-edit-modal-remove" class="dp-btn-danger">Dienstgänger entfernen</button>
+      <button id="dp-edit-modal-save" class="dp-btn-primary">Dienstgänger wechseln</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var LIST_DIENTE       = "Dienste";
+  var LIST_CONFIG       = "DienstplanKonfiguration";
+  var LIST_ADMINS       = "DienstplanAdmins";
+  var LIST_DIENSTGAENGER= "Dienstgaenger";
+
+  var ctx = {
+    currentUserId: _spPageContextInfo.userId,
+    currentUserDienstgrad: "",
+    currentUserName: "",
+    currentUserDisplay: _spPageContextInfo.userDisplayName || "",
+    currentPageUrl: window.location.href,
+    isAdmin: false,
+    holidays: [],
+    currentFrom: null,
+    currentTo: null,
+    mailTemplates: {
+      assign: "",
+      changeOld: "",
+      changeNew: "",
+      cancel: ""
+    },
+    dienstName: "",
+    dienstgaengerCache: [],
+    modalContext: null,
+    editModalContext: null,
+    disableSaturday: false,
+    disableSunday: false
+  };
+
+  // --- Datums-Helfer ---
+  function formatDateISO(d) {
+    var yyyy = d.getFullYear();
+    var mm = String(d.getMonth() + 1).padStart(2, "0");
+    var dd = String(d.getDate()).padStart(2, "0");
+    return yyyy + "-" + mm + "-" + dd;
+  }
+  function formatDateDE(d) {
+    var dd = String(d.getDate()).padStart(2, "0");
+    var mm = String(d.getMonth() + 1).padStart(2, "0");
+    var yyyy = d.getFullYear();
+    return dd + "." + mm + "." + yyyy;
+  }
+  function parseGermanDateToJsDate(text) {
+    if (!text) return new Date();
+    var parts = text.split(".");
+    if (parts.length !== 3) return new Date();
+    var day = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10) - 1;
+    var year = parseInt(parts[2], 10);
+    return new Date(year, month, day);
+  }
+  function getWeekdayNameDE(d) {
+    var days = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+    return days[d.getDay()];
+  }
+  function isWeekend(d) { var day = d.getDay(); return day === 0 || day === 6; }
+  function isSpecialDate(d) {
+    var m = d.getMonth() + 1, day = d.getDate();
+    return (m === 12 && (day === 24 || day === 31));
+  }
+  function isHoliday(d) {
+    return ctx.holidays.indexOf(formatDateISO(d)) >= 0;
+  }
+  function getMonthStartEnd(date) {
+    var start = new Date(date.getFullYear(), date.getMonth(), 1);
+    var end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    return { start: start, end: end };
+  }
+
+  function defaultAssignTemplate() {
+    return "Hallo {Name},\n\n" +
+      "Sie wurden als Dienstgänger für den Dienst {DienstName} am {Wochentag}, {Datum} eingeteilt.\n\n" +
+      "Verursacher: {Verursacher}\n" +
+      "Dienstplan: {SeitenLink}\n\n" +
+      "Mit freundlichen Grüßen\nIhr Dienstplan-Team";
+  }
+  function defaultChangeOldTemplate() {
+    return "Hallo {Name},\n\n" +
+      "Sie wurden vom Dienst {DienstName} am {Wochentag}, {Datum} abgemeldet.\n\n" +
+      "Verursacher: {Verursacher}\n" +
+      "Dienstplan: {SeitenLink}\n\n" +
+      "Mit freundlichen Grüßen\nIhr Dienstplan-Team";
+  }
+  function defaultChangeNewTemplate() {
+    return "Hallo {Name},\n\n" +
+      "Sie wurden neu als Dienstgänger für den Dienst {DienstName} am {Wochentag}, {Datum} eingeteilt.\n\n" +
+      "Verursacher: {Verursacher}\n" +
+      "Dienstplan: {SeitenLink}\n\n" +
+      "Mit freundlichen Grüßen\nIhr Dienstplan-Team";
+  }
+  function defaultCancelTemplate() {
+    return "Hallo {Name},\n\n" +
+      "Ihr Dienst {DienstName} am {Wochentag}, {Datum} wurde storniert.\n\n" +
+      "Verursacher: {Verursacher}\n" +
+      "Dienstplan: {SeitenLink}\n\n" +
+      "Mit freundlichen Grüßen\nIhr Dienstplan-Team";
+  }
+
+  // --- Initialisierung ---
+  $(document).ready(function () {
+    initUI();
+
+    var now = new Date();
+    var range = getMonthStartEnd(now);
+    ctx.currentFrom = range.start;
+    ctx.currentTo = range.end;
+    $("#dp-from-date").val(formatDateISO(range.start));
+    $("#dp-to-date").val(formatDateISO(range.end));
+    updateMonthLabel(range.start);
+
+    initMeineDiensteFilter();
+
+    resolveCurrentUserDienstgradAndName()
+      .then(checkIsAdmin)
+      .then(loadConfiguration)
+      .then(function () {
+        applyDienstNameToUI();
+        if (ctx.isAdmin) {
+          $("#dp-mail-template-assign").val(ctx.mailTemplates.assign || defaultAssignTemplate());
+          $("#dp-mail-template-change-old").val(ctx.mailTemplates.changeOld || defaultChangeOldTemplate());
+          $("#dp-mail-template-change-new").val(ctx.mailTemplates.changeNew || defaultChangeNewTemplate());
+          $("#dp-mail-template-cancel").val(ctx.mailTemplates.cancel || defaultCancelTemplate());
+          $("#dp-service-name").val(ctx.dienstName || "");
+          $("#dp-disable-saturday").prop("checked", !!ctx.disableSaturday);
+          $("#dp-disable-sunday").prop("checked", !!ctx.disableSunday);
+
+          // Admin-spezifische Tabs einblenden
+          $("#dp-tab-offen").show();
+          $("#dp-tab-intern").show();
+        }
+        setDienstgaengerListLink();
+        toggleAktionColumn($(".dp-tab-active").data("tab"));
+        return loadAndRenderServices();
+      });
+  });
+
+  function resolveCurrentUserDienstgradAndName() {
+    var deferred = $.Deferred();
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+
+    try {
+      var listDG = web.get_lists().getByTitle(LIST_DIENSTGAENGER);
+      var q = new SP.CamlQuery();
+      q.set_viewXml(
+        "<View><Query>" +
+        "<Where><Eq>" +
+        "<FieldRef Name='Dienstgaenger' LookupId='TRUE' />" +
+        "<Value Type='Integer'>" + ctx.currentUserId + "</Value>" +
+        "</Eq></Where>" +
+        "</Query><RowLimit>1</RowLimit></View>"
+      );
+      var items = listDG.getItems(q);
+      ctxJsom.load(items);
+      ctxJsom.executeQueryAsync(
+        function () {
+          if (items.get_count() > 0) {
+            var en = items.getEnumerator();
+            en.moveNext();
+            var it = en.get_current();
+            var dienstgrad = it.get_item("Title") || "";
+            var userVal = it.get_item("Dienstgaenger");
+            var name = userVal ? userVal.get_lookupValue() : "";
+            ctx.currentUserDienstgrad = dienstgrad;
+            ctx.currentUserName = name;
+          } else {
+            ctx.currentUserDienstgrad = "";
+            ctx.currentUserName = ctx.currentUserDisplay || "";
+          }
+          deferred.resolve();
+        },
+        function () {
+          ctx.currentUserDienstgrad = "";
+          ctx.currentUserName = ctx.currentUserDisplay || "";
+          deferred.resolve();
+        }
+      );
+    } catch (e) {
+      ctx.currentUserDienstgrad = "";
+      ctx.currentUserName = ctx.currentUserDisplay || "";
+      deferred.resolve();
+    }
+
+    return deferred.promise();
+  }
+
+  // „Meine Dienste“: heute bis +12 Monate
+  function initMeineDiensteFilter() {
+    var now = new Date();
+    ctx.currentFrom = now;
+    ctx.currentTo = new Date(now.getFullYear(), now.getMonth() + 12, now.getDate());
+  }
+
+  function applyDienstNameToUI() {
+    var name = ctx.dienstName || "";
+    var suffix = name ? " – " + name : "";
+    $("#dp-header-service-name").text(suffix);
+    $("#dp-modal-service-name").text(name || "Dienst");
+    $("#dp-edit-service-name").text(name || "Dienst");
+  }
+
+  function initUI() {
+    $(".dp-tab").on("click", function () {
+      var tabId = $(this).attr("id");
+      if ((tabId === "dp-tab-offen" || tabId === "dp-tab-intern") && !ctx.isAdmin) {
+        alert("Nur Administratoren haben Zugriff auf diesen Bereich.");
+        return;
+      }
+
+      $(".dp-tab").removeClass("dp-tab-active");
+      $(this).addClass("dp-tab-active");
+      var tab = $(this).data("tab");
+
+      if (tab === "meine") {
+        initMeineDiensteFilter();
+        $(".dp-filter-right").hide();
+        $("#dp-range-from-group").hide();
+        $("#dp-range-to-group").hide();
+      } else {
+        $(".dp-filter-right").show();
+        $("#dp-range-from-group").show();
+        $("#dp-range-to-group").show();
+      }
+
+      toggleAktionColumn(tab);
+
+      if (tab === "intern") {
+        if (ctx.isAdmin) {
+          $("#dp-config-panel").show();
+          $(".dp-filters").hide();
+          $(".dp-table-wrapper").hide();
+        } else {
+          alert("Nur Administratoren dürfen den internen Bereich öffnen.");
+        }
+      } else {
+        $("#dp-config-panel").hide();
+        $(".dp-filters").show();
+        $(".dp-table-wrapper").show();
+        loadAndRenderServices();
+      }
+    });
+
+    $("#dp-from-date, #dp-to-date").on("change", function () {
+      var activeTab = $(".dp-tab-active").data("tab");
+      if (activeTab === "meine") return;
+      var fromVal = $("#dp-from-date").val();
+      var toVal = $("#dp-to-date").val();
+      if (fromVal) ctx.currentFrom = new Date(fromVal);
+      if (toVal) ctx.currentTo = new Date(toVal);
+      loadAndRenderServices();
+    });
+
+    $("#dp-prev-month").on("click", function () {
+      var activeTab = $(".dp-tab-active").data("tab");
+      if (activeTab === "meine") return;
+      shiftMonth(-1);
+    });
+    $("#dp-next-month").on("click", function () {
+      var activeTab = $(".dp-tab-active").data("tab");
+      if (activeTab === "meine") return;
+      shiftMonth(1);
+    });
+
+    $("#dp-create-lists-btn").on("click", createLists);
+    $("#dp-delete-lists-btn").on("click", deleteLists);
+    $("#dp-save-mail-template-btn").on("click", saveMailTemplatesAndSettings);
+
+    $("#dp-modal-close-btn, #dp-modal-cancel").on("click", closeDienstgaengerModal);
+    $("#dp-modal-assign").on("click", assignDienstFromModal);
+
+    $("#dp-edit-modal-close-btn, #dp-edit-modal-cancel").on("click", closeEditModal);
+    $("#dp-edit-modal-save").on("click", applyDienstChange);
+    $("#dp-edit-modal-remove").on("click", removeDienstgaengerFromDienst);
+
+    $("#dp-open-list-dienste").on("click", function () { openListInNewTab(LIST_DIENTE); });
+    $("#dp-open-list-config").on("click", function () { openListInNewTab(LIST_CONFIG); });
+    $("#dp-open-list-admins").on("click", function () { openListInNewTab(LIST_ADMINS); });
+    $("#dp-open-list-dienstgaenger").on("click", function () { openListInNewTab(LIST_DIENSTGAENGER); });
+  }
+
+  function openListInNewTab(listTitle) {
+    var url = _spPageContextInfo.webAbsoluteUrl + "/Lists/" + encodeURIComponent(listTitle) + "/AllItems.aspx";
+    window.open(url, "_blank");
+  }
+
+  // Spalte Aktion:
+  // - „Alle Dienste“: nur für Admins sichtbar
+  // - „Meine Dienste“: komplett ausgeblendet
+  // - „Offene Dienste“/„intern“: sichtbar
+  function toggleAktionColumn(tab) {
+    var colIndex = 4;
+    var headerCells = $("#dp-header-row").children("th");
+
+    if (tab === "alle") {
+      if (ctx.isAdmin) {
+        headerCells.eq(colIndex).show();
+        $("#dp-tbody tr").each(function () {
+          $(this).children("td").eq(colIndex).show();
+        });
+      } else {
+        headerCells.eq(colIndex).hide();
+        $("#dp-tbody tr").each(function () {
+          $(this).children("td").eq(colIndex).hide();
+        });
+      }
+    } else if (tab === "meine") {
+      headerCells.eq(colIndex).hide();
+      $("#dp-tbody tr").each(function () {
+        $(this).children("td").eq(colIndex).hide();
+      });
+    } else {
+      headerCells.eq(colIndex).show();
+      $("#dp-tbody tr").each(function () {
+        $(this).children("td").eq(colIndex).show();
+      });
+    }
+  }
+
+  function updateMonthLabel(date) {
+    if (!date) return;
+    var months = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+    $("#dp-current-month-label").text(months[date.getMonth()] + " " + date.getFullYear());
+  }
+
+  function shiftMonth(delta) {
+    var base = $("#dp-from-date").val()
+      ? new Date($("#dp-from-date").val())
+      : (ctx.currentFrom || new Date());
+    var newBase = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+    var range = getMonthStartEnd(newBase);
+    $("#dp-from-date").val(formatDateISO(range.start));
+    $("#dp-to-date").val(formatDateISO(range.end));
+    ctx.currentFrom = range.start;
+    ctx.currentTo = range.end;
+    updateMonthLabel(range.start);
+    loadAndRenderServices();
+  }
+
+  function setDienstgaengerListLink() {
+    var url = _spPageContextInfo.webAbsoluteUrl + "/Lists/" + encodeURIComponent(LIST_DIENSTGAENGER) + "/AllItems.aspx";
+    $("#dp-dienstgaenger-list-link").html(
+      '<a class="dp-link" href="' + url + '" target="_blank">' + LIST_DIENSTGAENGER + '</a>'
+    );
+  }
+
+  function checkIsAdmin() {
+    var deferred = $.Deferred();
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var lists = web.get_lists();
+    var adminList;
+
+    try {
+      adminList = lists.getByTitle(LIST_ADMINS);
+      ctxJsom.load(adminList);
+    } catch (e) {}
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        var query = new SP.CamlQuery();
+        query.set_viewXml(
+          "<View><Query>" +
+          "<Where><Eq>" +
+          "<FieldRef Name='Benutzer' LookupId='TRUE' />" +
+          "<Value Type='Integer'>" + ctx.currentUserId + "</Value>" +
+          "</Eq></Where>" +
+          "</Query><RowLimit>1</RowLimit></View>"
+        );
+        var items = adminList.getItems(query);
+        ctxJsom.load(items);
+        ctxJsom.executeQueryAsync(
+          function () {
+            ctx.isAdmin = (items.get_count() > 0);
+            deferred.resolve();
+          },
+          function () {
+            ctx.isAdmin = false;
+            deferred.resolve();
+          }
+        );
+      },
+      function () {
+        ctx.isAdmin = true;
+        deferred.resolve();
+      }
+    );
+
+    return deferred.promise();
+  }
+
+  function loadConfiguration() {
+    var deferred = $.Deferred();
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var lists = web.get_lists();
+    var listConfig;
+
+    try {
+      listConfig = lists.getByTitle(LIST_CONFIG);
+    } catch (e) {
+      ctx.holidays = [];
+      ctx.mailTemplates = {
+        assign: defaultAssignTemplate(),
+        changeOld: defaultChangeOldTemplate(),
+        changeNew: defaultChangeNewTemplate(),
+        cancel: defaultCancelTemplate()
+      };
+      ctx.dienstName = "";
+      ctx.disableSaturday = false;
+      ctx.disableSunday = false;
+      deferred.resolve();
+      return deferred.promise();
+    }
+
+    var query = new SP.CamlQuery();
+    query.set_viewXml("<View><RowLimit>1</RowLimit></View>");
+    var items = listConfig.getItems(query);
+    ctxJsom.load(items);
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        if (items.get_count() > 0) {
+          var itEnum = items.getEnumerator();
+          itEnum.moveNext();
+          var item = itEnum.get_current();
+          var feiertage = item.get_item("Feiertage");
+          var mailAssign = item.get_item("MailVorlageAssign");
+          var mailChangeOld = item.get_item("MailVorlageChangeOld");
+          var mailChangeNew = item.get_item("MailVorlageChangeNew");
+          var mailCancel = item.get_item("MailVorlageCancel");
+          var dienstName = item.get_item("DienstName");
+          var disableSamstag = item.get_item("DisableSaturday");
+          var disableSonntag = item.get_item("DisableSunday");
+
+          if (feiertage) {
+            try { ctx.holidays = JSON.parse(feiertage); } catch (e) { ctx.holidays = []; }
+          } else ctx.holidays = [];
+
+          ctx.mailTemplates.assign = mailAssign || defaultAssignTemplate();
+          ctx.mailTemplates.changeOld = mailChangeOld || defaultChangeOldTemplate();
+          ctx.mailTemplates.changeNew = mailChangeNew || defaultChangeNewTemplate();
+          ctx.mailTemplates.cancel = mailCancel || defaultCancelTemplate();
+          ctx.dienstName = dienstName || "";
+          ctx.disableSaturday = !!disableSamstag;
+          ctx.disableSunday = !!disableSonntag;
+        } else {
+          ctx.holidays = [];
+          ctx.mailTemplates = {
+            assign: defaultAssignTemplate(),
+            changeOld: defaultChangeOldTemplate(),
+            changeNew: defaultChangeNewTemplate(),
+            cancel: defaultCancelTemplate()
+          };
+          ctx.dienstName = "";
+          ctx.disableSaturday = false;
+          ctx.disableSunday = false;
+        }
+        deferred.resolve();
+      },
+      function () {
+        ctx.holidays = [];
+        ctx.mailTemplates = {
+          assign: defaultAssignTemplate(),
+          changeOld: defaultChangeOldTemplate(),
+          changeNew: defaultChangeNewTemplate(),
+          cancel: defaultCancelTemplate()
+        };
+        ctx.dienstName = "";
+        ctx.disableSaturday = false;
+        ctx.disableSunday = false;
+        deferred.resolve();
+      }
+    );
+
+    return deferred.promise();
+  }
+
+  function saveMailTemplatesAndSettings() {
+    if (!ctx.isAdmin) {
+      alert("Nur Administratoren können die Einstellungen ändern.");
+      return;
+    }
+    ctx.mailTemplates.assign = $("#dp-mail-template-assign").val() || defaultAssignTemplate();
+    ctx.mailTemplates.changeOld = $("#dp-mail-template-change-old").val() || defaultChangeOldTemplate();
+    ctx.mailTemplates.changeNew = $("#dp-mail-template-change-new").val() || defaultChangeNewTemplate();
+    ctx.mailTemplates.cancel = $("#dp-mail-template-cancel").val() || defaultCancelTemplate();
+    ctx.dienstName = $("#dp-service-name").val() || "";
+    ctx.disableSaturday = $("#dp-disable-saturday").is(":checked");
+    ctx.disableSunday = $("#dp-disable-sunday").is(":checked");
+    saveConfiguration();
+  }
+
+  function saveConfiguration() {
+    if (!ctx.isAdmin) {
+      alert("Nur Administratoren können die Konfiguration ändern.");
+      return;
+    }
+
+    var holidaysText = $("#dp-holidays-json") && $("#dp-holidays-json").val
+      ? $("#dp-holidays-json").val()
+      : "[]";
+    var holidays;
+    try {
+      holidays = JSON.parse(holidaysText || "[]");
+      ctx.holidays = holidays;
+    } catch (e) {
+      alert("Fehler: Feiertage müssen ein gültiges JSON-Array sein.");
+      return;
+    }
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var listConfig;
+
+    try {
+      listConfig = web.get_lists().getByTitle(LIST_CONFIG);
+    } catch (e) {
+      alert("Konfigurationsliste '" + LIST_CONFIG + "' existiert noch nicht.");
+      return;
+    }
+
+    var query = new SP.CamlQuery();
+    query.set_viewXml("<View><RowLimit>1</RowLimit></View>");
+    var items = listConfig.getItems(query);
+    ctxJsom.load(items);
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        var item;
+        if (items.get_count() > 0) {
+          var en = items.getEnumerator();
+          en.moveNext();
+          item = en.get_current();
+        } else {
+          var ci = new SP.ListItemCreationInformation();
+          item = listConfig.addItem(ci);
+          item.set_item("Title", "Standard");
+        }
+
+        item.set_item("Feiertage", JSON.stringify(holidays));
+        item.set_item("MailVorlageAssign", ctx.mailTemplates.assign || defaultAssignTemplate());
+        item.set_item("MailVorlageChangeOld", ctx.mailTemplates.changeOld || defaultChangeOldTemplate());
+        item.set_item("MailVorlageChangeNew", ctx.mailTemplates.changeNew || defaultChangeNewTemplate());
+        item.set_item("MailVorlageCancel", ctx.mailTemplates.cancel || defaultCancelTemplate());
+        item.set_item("DienstName", ctx.dienstName || "");
+        item.set_item("DisableSaturday", ctx.disableSaturday);
+        item.set_item("DisableSunday", ctx.disableSunday);
+        item.update();
+
+        ctxJsom.executeQueryAsync(
+          function () {
+            $("#dp-config-status").text("Konfiguration gespeichert.");
+            applyDienstNameToUI();
+            loadAndRenderServices();
+          },
+          function (s2, a2) {
+            console.error("Fehler beim Speichern der Konfiguration: " + a2.get_message());
+            $("#dp-config-status").text("Fehler beim Speichern der Konfiguration.");
+          }
+        );
+      },
+      function (s, a) {
+        console.error("Fehler beim Laden der Konfigurationsliste: " + a.get_message());
+        $("#dp-config-status").text("Fehler beim Speichern der Konfiguration.");
+      }
+    );
+  }
+
+  function loadAndRenderServices() {
+    var deferred = $.Deferred();
+
+    var activeTab = $(".dp-tab-active").data("tab");
+    var now = new Date();
+    var fromDate, toDate;
+
+    if (activeTab === "meine") {
+      initMeineDiensteFilter();
+      fromDate = ctx.currentFrom;
+      toDate = ctx.currentTo;
+    } else {
+      var labelVal = $("#dp-current-month-label").text();
+      if (labelVal) {
+        var parts = labelVal.split(" ");
+        var year = parseInt(parts[1], 10) || (new Date()).getFullYear();
+        var monthIndex = (function (m) {
+          var names = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+          for (var i = 0; i < names.length; i++) {
+            if (names[i] === m) return i;
+          }
+          return (new Date()).getMonth();
+        })(parts[0]);
+        fromDate = new Date(year, monthIndex, 1);
+        toDate = new Date(year, monthIndex + 1, 0);
+      } else {
+        var range = getMonthStartEnd(new Date());
+        fromDate = range.start;
+        toDate = range.end;
+      }
+    }
+
+    if (!fromDate || !toDate) {
+      deferred.resolve();
+      return deferred.promise();
+    }
+
+    if (activeTab === "meine") {
+      ctx.currentFrom = fromDate;
+      ctx.currentTo = toDate;
+    }
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var list;
+    try {
+      list = web.get_lists().getByTitle(LIST_DIENTE);
+    } catch (e) {
+      $("#dp-tbody").empty().append(
+        $("<tr>").append($("<td>").attr("colspan", 5).text("Liste '" + LIST_DIENTE + "' existiert noch nicht."))
+      );
+      deferred.resolve();
+      return deferred.promise();
+    }
+
+    var fromIso = formatDateISO(fromDate);
+    var toIso = formatDateISO(toDate);
+
+    var whereCore =
+      "<And>" +
+        "<Geq><FieldRef Name='DienstDatum' />" +
+          "<Value IncludeTimeValue='FALSE' Type='DateTime'>" + fromIso + "</Value>" +
+        "</Geq>" +
+        "<Leq><FieldRef Name='DienstDatum' />" +
+          "<Value IncludeTimeValue='FALSE' Type='DateTime'>" + toIso + "</Value>" +
+        "</Leq>" +
+      "</And>";
+
+    var whereXml;
+    if (activeTab === "offen") {
+      whereXml =
+        "<And>" + whereCore +
+          "<Neq><FieldRef Name='Status' />" +
+            "<Value Type='Choice'>Storniert</Value>" +
+          "</Neq>" +
+        "</And>";
+    } else if (activeTab === "meine") {
+      whereXml =
+        "<And>" + whereCore +
+          "<Eq><FieldRef Name='Dienstgaenger' LookupId='TRUE' />" +
+            "<Value Type='Integer'>" + ctx.currentUserId + "</Value>" +
+          "</Eq>" +
+        "</And>";
+    } else {
+      whereXml = whereCore;
+    }
+
+    var caml =
+      "<View>" +
+        "<Query>" +
+          "<Where>" + whereXml + "</Where>" +
+          "<OrderBy><FieldRef Name='DienstDatum' Ascending='TRUE' /></OrderBy>" +
+        "</Query>" +
+      "</View>";
+
+    var query = new SP.CamlQuery();
+    query.set_viewXml(caml);
+
+    var items = list.getItems(query);
+    ctxJsom.load(items);
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        var results = [];
+        var enumerator = items.getEnumerator();
+        while (enumerator.moveNext()) {
+          var it = enumerator.get_current();
+          var vals = it.get_fieldValues();
+          results.push({
+            Id: it.get_id(),
+            DienstDatum: vals["DienstDatum"],
+            Status: vals["Status"],
+            Abteilung: vals["Abteilung"] || "",
+            Dienstgaenger: vals["Dienstgaenger"]
+          });
+        }
+
+        if (activeTab === "meine") {
+          renderTableSimple(results);
+        } else {
+          renderTableWithGrid(results, fromDate, toDate, activeTab);
+        }
+
+        toggleAktionColumn(activeTab);
+        deferred.resolve();
+      },
+      function (s, a) {
+        console.error("Fehler beim Laden der Daten aus '" + LIST_DIENTE + "': " + a.get_message());
+        $("#dp-tbody").empty().append(
+          $("<tr>").append(
+            $("<td>").attr("colspan", 5).text("Fehler beim Laden der Daten aus '" + LIST_DIENTE + "'.")
+          )
+        );
+        deferred.reject(a.get_message());
+      }
+    );
+
+    return deferred.promise();
+  }
+
+  function renderTableWithGrid(items, fromDate, toDate, activeTab) {
+    var tbody = $("#dp-tbody");
+    tbody.empty();
+    if (!fromDate || !toDate) return;
+
+    var dayItemsByDate = {};
+    items.forEach(function (it) {
+      var d = new Date(it.DienstDatum);
+      var key = formatDateISO(d);
+      if (!dayItemsByDate[key]) dayItemsByDate[key] = [];
+      dayItemsByDate[key].push(it);
+    });
+
+    var current = new Date(fromDate.getTime());
+    while (current <= toDate) {
+      var dateKey = formatDateISO(current);
+      var dayEntries = dayItemsByDate[dateKey] || [];
+
+      if (activeTab === "offen") {
+        if (dayEntries.length === 0) {
+          appendRow(current, null);
+        } else {
+          var openEntries = dayEntries.filter(function (e) {
+            var st = (e.Status || "").toString().toLowerCase();
+            return st !== "belegt" && st !== "keindienst";
+          });
+          openEntries.forEach(function (entry) {
+            appendRow(current, entry);
+          });
+        }
+      } else {
+        if (dayEntries.length === 0) {
+          appendRow(current, null);
+        } else {
+          dayEntries.forEach(function (entry) {
+            appendRow(current, entry);
+          });
+        }
+      }
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (tbody.children().length === 0) {
+      var colCount = 5;
+      tbody.append(
+        $("<tr>").append(
+          $("<td>").attr("colspan", colCount).text(
+            activeTab === "offen"
+              ? "Es gibt im gewählten Zeitraum keine offenen Tage."
+              : "Es gibt im gewählten Zeitraum keine Tage mit Diensten."
+          )
+        )
+      );
+    }
+  }
+
+  function renderTableSimple(items) {
+    var tbody = $("#dp-tbody");
+    tbody.empty();
+    if (!items || !items.length) {
+      tbody.append(
+        $("<tr>").append(
+          $("<td>").attr("colspan", 4).text("Es sind keine kommenden Dienste vorhanden.")
+        )
+      );
+      return;
+    }
+    items.forEach(function (entry) {
+      var date = new Date(entry.DienstDatum);
+      appendRow(date, entry);
+    });
+  }
+
+  function mergeDienstgradAndNameForUser(userId) {
+    if (!userId) return "";
+    var dg = ctx.dienstgaengerCache.find(function (x) { return x.userId === userId; });
+    if (!dg) return "";
+    var dienstgrad = dg.dienstgrad || "";
+    var name = dg.name || "";
+    if (dienstgrad && name) return dienstgrad + " " + name;
+    return name || dienstgrad;
+  }
+
+  function isAutoDisabledDay(d) {
+    var dow = d.getDay();
+    if (dow === 6 && ctx.disableSaturday) return true;
+    if (dow === 0 && ctx.disableSunday) return true;
+    return false;
+  }
+
+  function isDayDisabledByStatus(entry) {
+    return entry && entry.Status && String(entry.Status).toLowerCase() === "keindienst";
+  }
+
+  function appendRow(date, entry) {
+    var weekdayName = getWeekdayNameDE(date);
+    var dateStr = formatDateDE(date);
+
+    var tr = $("<tr>");
+    if (isHoliday(date)) tr.addClass("dp-row-holiday");
+    else if (isSpecialDate(date)) tr.addClass("dp-row-special-date");
+    else if (isWeekend(date)) tr.addClass("dp-row-weekend");
+
+    $("<td>").text(weekdayName).appendTo(tr);
+    $("<td>").text(dateStr).appendTo(tr);
+
+    var abt = "";
+    var dgHtml = "";
+
+    var disabled = isDayDisabledByStatus(entry) || (!entry && isAutoDisabledDay(date));
+    var hasDg = !!(entry && entry.Dienstgaenger);
+
+    if (disabled) {
+      dgHtml = "<span class='dp-tag dp-tag-closed'>kein Dienst</span>";
+      abt = "";
+    } else if (hasDg) {
+      var uid = entry.Dienstgaenger.get_lookupId && entry.Dienstgaenger.get_lookupId();
+      var fullDisplay = mergeDienstgradAndNameForUser(uid);
+      var fallbackName = entry.Dienstgaenger.get_lookupValue
+        ? entry.Dienstgaenger.get_lookupValue()
+        : entry.Dienstgaenger;
+      dgHtml = fullDisplay || fallbackName;
+      abt = entry.Abteilung || "";
+    } else {
+      dgHtml = "<span class='dp-tag dp-tag-open'>offen</span>";
+      abt = "";
+    }
+
+    $("<td>").text(abt).appendTo(tr);
+    $("<td>").html(dgHtml).appendTo(tr);
+
+    var activeTab = $(".dp-tab-active").data("tab");
+    var actionCell = $("<td>").addClass("dp-col-aktion");
+
+    var btnDienst = $("<button>").addClass("dp-btn-primary");
+    var btnToggleClosed = $("<button>").addClass("dp-btn-secondary");
+
+    var isOpen = !hasDg && !disabled;
+    if (!(ctx.isAdmin && (activeTab === "offen" || activeTab === "alle") && isOpen)) {
+      btnToggleClosed = null;
+    }
+
+    if (!entry) {
+      btnDienst.text("Dienst anlegen");
+      if (ctx.isAdmin) {
+        btnDienst.on("click", function () {
+          var rowDate = parseGermanDateToJsDate(
+            $(this).closest("tr").find("td:nth-child(2)").text()
+          );
+          openDienstgaengerModal(rowDate, null);
+        });
+      } else {
+        btnDienst.prop("disabled", true).addClass("dp-btn-disabled");
+      }
+    } else if (!hasDg) {
+      btnDienst.text("Dienst anlegen");
+      if (ctx.isAdmin) {
+        btnDienst.on("click", function () {
+          var rowDate = parseGermanDateToJsDate(
+            $(this).closest("tr").find("td:nth-child(2)").text()
+          );
+          openDienstgaengerModal(rowDate, entry);
+        });
+      } else {
+        btnDienst.prop("disabled", true).addClass("dp-btn-disabled");
+      }
+    } else {
+      if (activeTab === "alle") {
+        btnDienst.text("Dienst anpassen");
+        if (ctx.isAdmin) {
+          btnDienst.on("click", function () {
+            var rowDate = parseGermanDateToJsDate(
+              $(this).closest("tr").find("td:nth-child(2)").text()
+            );
+            openEditModal(rowDate, entry);
+          });
+        } else {
+          btnDienst.prop("disabled", true).addClass("dp-btn-disabled");
+        }
+      } else if (activeTab === "meine") {
+        btnDienst = null;
+      } else {
+        btnDienst.text("Dienst anlegen").prop("disabled", true).addClass("dp-btn-disabled");
+      }
+    }
+
+    if (btnDienst) actionCell.append(btnDienst);
+    if (btnToggleClosed) {
+      btnToggleClosed.text("kein Dienst");
+      btnToggleClosed.on("click", function () {
+        var rowDate = parseGermanDateToJsDate(
+          $(this).closest("tr").find("td:nth-child(2)").text()
+        );
+        disableDay(rowDate, entry);
+      });
+      actionCell.append(btnToggleClosed);
+    }
+
+    tr.append(actionCell);
+    $("#dp-tbody").append(tr);
+  }
+
+  function disableDay(date, entry) {
+    if (!ctx.isAdmin) return;
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var list = web.get_lists().getByTitle(LIST_DIENTE);
+
+    if (entry && entry.Id) {
+      var item = list.getItemById(entry.Id);
+      item.set_item("Dienstgaenger", null);
+      item.set_item("Abteilung", "");
+      item.set_item("Status", "KeinDienst");
+      item.update();
+      ctxJsom.executeQueryAsync(
+        function () { loadAndRenderServices(); },
+        function (s, a) {
+          console.error("Fehler beim Deaktivieren des Tages: " + a.get_message());
+          alert("Fehler beim Deaktivieren des Tages.");
+        }
+      );
+    } else {
+      var ci = new SP.ListItemCreationInformation();
+      var itemNew = list.addItem(ci);
+      itemNew.set_item("Title", ctx.dienstName || "Dienst");
+      itemNew.set_item("DienstDatum", date);
+      itemNew.set_item("Status", "KeinDienst");
+      itemNew.set_item("Abteilung", "");
+      itemNew.set_item("Dienstgaenger", null);
+      itemNew.update();
+      ctxJsom.executeQueryAsync(
+        function () { loadAndRenderServices(); },
+        function (s, a) {
+          console.error("Fehler beim Deaktivieren des Tages (neu): " + a.get_message());
+          alert("Fehler beim Deaktivieren des Tages.");
+        }
+      );
+    }
+  }
+
+  function enableDay(date, entry) {
+    if (!ctx.isAdmin) return;
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var list = web.get_lists().getByTitle(LIST_DIENTE);
+
+    if (entry && entry.Id) {
+      var item = list.getItemById(entry.Id);
+      item.set_item("Dienstgaenger", null);
+      item.set_item("Abteilung", "");
+      item.set_item("Status", "Offen");
+      item.update();
+      ctxJsom.executeQueryAsync(
+        function () { loadAndRenderServices(); },
+        function (s, a) {
+          console.error("Fehler beim Aktivieren des Tages: " + a.get_message());
+          alert("Fehler beim Aktivieren des Tages.");
+        }
+      );
+    } else {
+      var ci = new SP.ListItemCreationInformation();
+      var itemNew = list.addItem(ci);
+      itemNew.set_item("Title", ctx.dienstName || "Dienst");
+      itemNew.set_item("DienstDatum", date);
+      itemNew.set_item("Status", "Offen");
+      itemNew.set_item("Abteilung", "");
+      itemNew.set_item("Dienstgaenger", null);
+      itemNew.update();
+      ctxJsom.executeQueryAsync(
+        function () { loadAndRenderServices(); },
+        function (s, a) {
+          console.error("Fehler beim Aktivieren des Tages (neu): " + a.get_message());
+          alert("Fehler beim Aktivieren des Tages.");
+        }
+      );
+    }
+  }
+
+  function openDienstgaengerModal(date, entry) {
+    ctx.modalContext = { date: date, entry: entry };
+    $("#dp-modal-date-label").text(formatDateDE(date));
+    $("#dp-modal-service-name").text(ctx.dienstName || "Dienst");
+    loadDienstgaengerWithStats(date).then(function () {
+      $("#dp-modal-backdrop").css("display", "flex");
+    });
+  }
+
+  function closeDienstgaengerModal() {
+    $("#dp-modal-backdrop").hide();
+    ctx.modalContext = null;
+  }
+
+  function assignDienstFromModal() {
+    if (!ctx.modalContext) { closeDienstgaengerModal(); return; }
+    var selectedId = $("input[name='dp-dienstgaenger-radio']:checked").val();
+    if (!selectedId) {
+      alert("Bitte einen Dienstgänger auswählen.");
+      return;
+    }
+    selectedId = parseInt(selectedId, 10);
+    var dg = ctx.dienstgaengerCache.find(function (d) { return d.userId === selectedId; });
+    if (!dg) {
+      alert("Ausgewählter Dienstgänger konnte nicht gefunden werden.");
+      return;
+    }
+    saveDienstWithDienstgaenger(ctx.modalContext.date, ctx.modalContext.entry, dg);
+  }
+
+  function openEditModal(date, entry) {
+    if (!entry || !entry.Id || !entry.Dienstgaenger) {
+      alert("Dieser Dienst hat keinen zugewiesenen Dienstgänger.");
+      return;
+    }
+
+    var uid = entry.Dienstgaenger.get_lookupId && entry.Dienstgaenger.get_lookupId();
+    var currentDgName = mergeDienstgradAndNameForUser(uid) ||
+      (entry.Dienstgaenger.get_lookupValue
+        ? entry.Dienstgaenger.get_lookupValue()
+        : entry.Dienstgaenger);
+
+    var currentDgId = uid || null;
+
+    ctx.editModalContext = {
+      date: date,
+      entry: entry,
+      oldUserId: currentDgId,
+      oldUserName: currentDgName,
+      oldUserEmail: null
+    };
+
+    $("#dp-edit-date-label").text(formatDateDE(date));
+    $("#dp-edit-service-name").text(ctx.dienstName || "Dienst");
+    $("#dp-edit-current-dg").text(currentDgName || "(unbekannt)");
+
+    loadDienstgaengerWithStats(date).then(function () {
+      renderEditDienstgaengerTable(ctx.dienstgaengerCache, currentDgId);
+      $("#dp-edit-modal-backdrop").css("display", "flex");
+    });
+  }
+
+  function closeEditModal() {
+    $("#dp-edit-modal-backdrop").hide();
+    ctx.editModalContext = null;
+  }
+
+  function renderEditDienstgaengerTable(arr, currentUserId) {
+    var tbody = $("#dp-edit-dienstgaenger-table tbody");
+    tbody.empty();
+    arr.forEach(function (d) {
+      var tr = $("<tr>");
+      var radioTd = $("<td>");
+      var radio = $("<input type='radio' name='dp-edit-dienstgaenger-radio'>").val(d.userId);
+      if (currentUserId && d.userId === currentUserId) {
+        tr.addClass("dp-dienstgaenger-selected");
+      }
+      radio.on("change", function () {
+        $("#dp-edit-dienstgaenger-table tbody tr").removeClass("dp-dienstgaenger-selected");
+        tr.addClass("dp-dienstgaenger-selected");
+      });
+      radioTd.append(radio);
+      tr.append(radioTd);
+      tr.append($("<td>").text(d.dienstgrad || ""));
+      tr.append($("<td>").text(d.name));
+      tr.append($("<td>").text(d.abteilung || ""));
+      tr.append($("<td>").text(d.yearCount || 0));
+      tr.append($("<td>").text(d.monthCount || 0));
+      tbody.append(tr);
+    });
+  }
+
+  function applyDienstChange() {
+    if (!ctx.editModalContext) { closeEditModal(); return; }
+
+    var selectedId = $("input[name='dp-edit-dienstgaenger-radio']:checked").val();
+    if (!selectedId) {
+      alert("Bitte einen neuen Dienstgänger auswählen.");
+      return;
+    }
+    selectedId = parseInt(selectedId, 10);
+
+    if (ctx.editModalContext.oldUserId && selectedId === ctx.editModalContext.oldUserId) {
+      alert("Bitte einen anderen Dienstgänger auswählen als den aktuellen.");
+      return;
+    }
+
+    var newDg = ctx.dienstgaengerCache.find(function (d) { return d.userId === selectedId; });
+    if (!newDg) {
+      alert("Ausgewählter Dienstgänger konnte nicht gefunden werden.");
+      return;
+    }
+
+    var date = ctx.editModalContext.date;
+    var entry = ctx.editModalContext.entry;
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var list = web.get_lists().getByTitle(LIST_DIENTE);
+    var item = list.getItemById(entry.Id);
+
+    var userVal = new SP.FieldUserValue();
+    userVal.set_lookupId(newDg.userId);
+    item.set_item("Dienstgaenger", userVal);
+    item.update();
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        sendChangeMails(entry, ctx.editModalContext, newDg, date);
+        loadAndRenderServices();
+      },
+      function (s, a) {
+        console.error("Fehler beim Aktualisieren des Dienstes: " + a.get_message());
+        alert("Fehler beim Aktualisieren des Dienstes.");
+      }
+    );
+  }
+
+  function removeDienstgaengerFromDienst() {
+    if (!ctx.editModalContext) { closeEditModal(); return; }
+
+    if (!confirm("Dienstgänger wirklich aus diesem Dienst entfernen?")) return;
+
+    var date = ctx.editModalContext.date;
+    var entry = ctx.editModalContext.entry;
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var list = web.get_lists().getByTitle(LIST_DIENTE);
+    var item = list.getItemById(entry.Id);
+
+    item.set_item("Dienstgaenger", null);
+    item.set_item("Status", "Offen");
+    item.update();
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        sendRemovalMail(entry, ctx.editModalContext, date);
+        loadAndRenderServices();
+      },
+      function (s, a) {
+        console.error("Fehler beim Entfernen des Dienstgängers: " + a.get_message());
+        alert("Fehler beim Entfernen des Dienstgängers.");
+      }
+    );
+  }
+
+  function buildMailBodyFromTemplate(template, user, date) {
+    var name = user.get_title ? user.get_title() : "";
+    var datum = formatDateDE(date);
+    var wochentag = getWeekdayNameDE(date);
+    var seitenLink = ctx.currentPageUrl || _spPageContextInfo.serverRequestPath || "";
+    var verursacher;
+    if (ctx.currentUserDienstgrad || ctx.currentUserName) {
+      var parts = [];
+      if (ctx.currentUserDienstgrad) parts.push(ctx.currentUserDienstgrad);
+      if (ctx.currentUserName) parts.push(ctx.currentUserName);
+      verursacher = parts.join(" ");
+    } else {
+      verursacher = ctx.currentUserDisplay || "";
+    }
+
+    var textBody = (template || "")
+      .replace(/{Name}/g, name)
+      .replace(/{Datum}/g, datum)
+      .replace(/{Wochentag}/g, wochentag)
+      .replace(/{DienstName}/g, ctx.dienstName || "Dienst")
+      .replace(/{SeitenLink}/g, seitenLink)
+      .replace(/{Verursacher}/g, verursacher);
+
+    var escaped = textBody
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    var htmlParagraphs = escaped.split(/\n\s*\n/).map(function (block) {
+      var lines = block.split(/\n/).join("<br>");
+      return "<p style=\"margin:0 0 12px 0;\">" + lines + "</p>";
+    }).join("");
+
+    var html =
+      "<!DOCTYPE html>" +
+      "<html><head><meta charset=\"utf-8\"></head><body style=\"font-family:Segoe UI,Arial,sans-serif;font-size:12pt;color:#323130;background-color:#f3f2f1;\">" +
+      "<div style=\"max-width:600px;margin:16px auto;background:#ffffff;border:1px solid #e1dfdd;border-radius:4px;box-shadow:0 2px 4px rgba(0,0,0,0.1);\">" +
+      "<div style=\"background:#3f3f3f;color:#ffffff;padding:10px 16px;border-radius:4px 4px 0 0;\">" +
+      "<h2 style=\"margin:0;font-size:16pt;font-weight:500;\">Dienstplan-Benachrichtigung</h2>" +
+      "</div>" +
+      "<div style=\"padding:16px;\">" +
+      htmlParagraphs +
+      "<hr style=\"border:none;border-top:1px solid #e1dfdd;margin:16px 0;\">" +
+      "<p style=\"font-size:10pt;color:#605e5c;margin:0;\">" +
+      "Dies ist eine automatische Nachricht aus dem Dienstplan-Tool. " +
+      "Bitte antworten Sie nur, falls Rückfragen bestehen." +
+      "</p>" +
+      "</div>" +
+      "</div>" +
+      "</body></html>";
+
+    return html;
+  }
+
+  function getFormDigest(webUrl) {
+    return $.ajax({
+      url: webUrl + "/_api/contextinfo",
+      method: "POST",
+      headers: { "Accept": "application/json; odata=verbose" }
+    });
+  }
+
+  function sendMailWithUtility(toEmail, subject, bodyHtml) {
+    if (!toEmail) return;
+
+    var siteUrl = _spPageContextInfo.webAbsoluteUrl.replace(/\/$/, "");
+    var urlTemplate = siteUrl + "/_api/SP.Utilities.Utility.SendEmail";
+
+    var emailProps = {
+      To: [toEmail],
+      CC: [],
+      Subject: subject,
+      Body: bodyHtml
+    };
+
+    getFormDigest(siteUrl).then(function (data) {
+      var formDigest = data.d.GetContextWebInformation.FormDigestValue;
+
+      $.ajax({
+        contentType: "application/json;odata=verbose",
+        url: urlTemplate,
+        type: "POST",
+        data: JSON.stringify({
+          'properties': {
+            '__metadata': { 'type': 'SP.Utilities.EmailProperties' },
+            'To': { 'results': emailProps.To },
+            'Body': emailProps.Body,
+            'Subject': emailProps.Subject,
+            'CC': { 'results': emailProps.CC }
+          }
+        }),
+        headers: {
+          "Accept": "application/json;odata=verbose",
+          "content-type": "application/json;odata=verbose",
+          "X-RequestDigest": formDigest
+        },
+        success: function () {
+          console.log("Email Sent to " + toEmail);
+        },
+        error: function (err) {
+          console.error("Got Error while sending email: ", err);
+          alert("Error in sending Email");
+        }
+      });
+    });
+  }
+
+  function sendMailToUser(user, date) {
+    var email = user.get_email && user.get_email();
+    if (!email) {
+      console.warn("Benutzer hat keine E-Mail, Mail wird nicht gesendet.");
+      return;
+    }
+    var datum = formatDateDE(date);
+    var wochentag = getWeekdayNameDE(date);
+    var subject = (ctx.dienstName || "Dienst") + " am " + wochentag + ", " + datum;
+    var bodyHtml = buildMailBodyFromTemplate(ctx.mailTemplates.assign || defaultAssignTemplate(), user, date);
+    sendMailWithUtility(email, subject, bodyHtml);
+  }
+
+  function sendChangeMails(entry, editCtx, newDg, date) {
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var datum = formatDateDE(date);
+    var wochentag = getWeekdayNameDE(date);
+
+    var userOld = editCtx.oldUserId
+      ? web.get_siteUsers().getById(editCtx.oldUserId)
+      : web.ensureUser(editCtx.oldUserName);
+    var userNew = web.ensureUser(newDg.email || newDg.name);
+
+    ctxJsom.load(userOld);
+    ctxJsom.load(userNew);
+    ctxJsom.executeQueryAsync(
+      function () {
+        var subjectOld = "Dienständerung " + (ctx.dienstName || "Dienst") + " am " + wochentag + ", " + datum;
+        var bodyOld = buildMailBodyFromTemplate(ctx.mailTemplates.changeOld || defaultChangeOldTemplate(), userOld, date);
+        sendMailWithUtility(userOld.get_email(), subjectOld, bodyOld);
+
+        var subjectNew = "Neuer " + (ctx.dienstName || "Dienst") + " am " + wochentag + ", " + datum;
+        var bodyNew = buildMailBodyFromTemplate(ctx.mailTemplates.changeNew || defaultChangeNewTemplate(), userNew, date);
+        sendMailWithUtility(userNew.get_email(), subjectNew, bodyNew);
+
+        closeEditModal();
+      },
+      function (s, a) {
+        console.error("Fehler beim Laden der Benutzer für Wechsel-Mail: " + a.get_message());
+        closeEditModal();
+      }
+    );
+  }
+
+  function sendRemovalMail(entry, editCtx, date) {
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+
+    if (!editCtx.oldUserId && !editCtx.oldUserName) {
+      closeEditModal();
+      return;
+    }
+
+    var datum = formatDateDE(date);
+    var wochentag = getWeekdayNameDE(date);
+
+    var userOld = editCtx.oldUserId
+      ? web.get_siteUsers().getById(editCtx.oldUserId)
+      : web.ensureUser(editCtx.oldUserName);
+
+    ctxJsom.load(userOld);
+    ctxJsom.executeQueryAsync(
+      function () {
+        var email = userOld.get_email();
+        if (email) {
+          var subject = "Stornierung " + (ctx.dienstName || "Dienst") + " am " + wochentag + ", " + datum;
+          var body = buildMailBodyFromTemplate(ctx.mailTemplates.cancel || defaultCancelTemplate(), userOld, date);
+          sendMailWithUtility(email, subject, body);
+        }
+        closeEditModal();
+      },
+      function (s, a) {
+        console.error("Fehler beim Laden des Benutzers für Storno-Mail: " + a.get_message());
+        closeEditModal();
+      }
+    );
+  }
+
+  function loadDienstgaengerWithStats(targetDate) {
+    var deferred = $.Deferred();
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+
+    var name = LIST_DIENSTGAENGER;
+    var listDG;
+    try {
+      listDG = web.get_lists().getByTitle(name);
+    } catch (e) {
+      alert("Liste der Dienstgänger '" + name + "' existiert nicht.");
+      deferred.resolve();
+      return deferred.promise();
+    }
+
+    var qDG = new SP.CamlQuery();
+    qDG.set_viewXml("<View><RowLimit>500</RowLimit></View>");
+    var itemsDG = listDG.getItems(qDG);
+    ctxJsom.load(itemsDG);
+
+    var year = targetDate.getFullYear();
+    var yearStart = new Date(year, 0, 1);
+    var yearEnd = new Date(year, 11, 31);
+    var yearStartIso = formatDateISO(yearStart);
+    var yearEndIso = formatDateISO(yearEnd);
+
+    var targetMonth = targetDate.getMonth();
+
+    var listDienste = web.get_lists().getByTitle(LIST_DIENTE);
+    var whereYear =
+      "<And>" +
+        "<Geq><FieldRef Name='DienstDatum' />" +
+          "<Value IncludeTimeValue='FALSE' Type='DateTime'>" + yearStartIso + "</Value>" +
+        "</Geq>" +
+        "<Leq><FieldRef Name='DienstDatum' />" +
+          "<Value IncludeTimeValue='FALSE' Type='DateTime'>" + yearEndIso + "</Value>" +
+        "</Leq>" +
+      "</And>";
+    var camlYear = "<View><Query><Where>" + whereYear + "</Where></Query></View>";
+    var qYear = new SP.CamlQuery();
+    qYear.set_viewXml(camlYear);
+    var itemsYear = listDienste.getItems(qYear);
+    ctxJsom.load(itemsYear);
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        var dgArr = [];
+        var enDG = itemsDG.getEnumerator();
+        while (enDG.moveNext()) {
+          var it = enDG.get_current();
+          var dienstgrad = it.get_item("Title") || "";
+          var userVal = it.get_item("Dienstgaenger");
+          if (!userVal) continue;
+          dgArr.push({
+            userId: userVal.get_lookupId(),
+            name: userVal.get_lookupValue(),
+            email: userVal.get_email ? userVal.get_email() : null,
+            abteilung: it.get_item("Abteilung") || "",
+            dienstgrad: dienstgrad
+          });
+        }
+
+        var stats = {};
+        var enYear = itemsYear.getEnumerator();
+        while (enYear.moveNext()) {
+          var di = enYear.get_current();
+          var d = di.get_item("DienstDatum");
+          var m = (new Date(d)).getMonth();
+          var userValD = di.get_item("Dienstgaenger");
+          if (!userValD) continue;
+          var uid = userValD.get_lookupId();
+          if (!stats[uid]) stats[uid] = { yearCount: 0, months: {} };
+          stats[uid].yearCount++;
+          stats[uid].months[m] = (stats[uid].months[m] || 0) + 1;
+        }
+
+        dgArr.forEach(function (d) {
+          var s = stats[d.userId] || { yearCount: 0, months: {} };
+          d.yearCount = s.yearCount;
+          d.monthCount = s.months[targetMonth] || 0;
+        });
+
+        ctx.dienstgaengerCache = dgArr;
+        renderDienstgaengerTable(dgArr);
+        deferred.resolve();
+      },
+      function (s, a) {
+        console.error("Fehler beim Laden der Dienstgänger oder Jahresdienste: " + a.get_message());
+        deferred.reject(a.get_message());
+      }
+    );
+
+    return deferred.promise();
+  }
+
+  function renderDienstgaengerTable(arr) {
+    var tbody = $("#dp-dienstgaenger-table tbody");
+    tbody.empty();
+    arr.forEach(function (d) {
+      var tr = $("<tr>");
+      var radioTd = $("<td>");
+      var radio = $("<input type='radio' name='dp-dienstgaenger-radio'>").val(d.userId);
+      radio.on("change", function () {
+        $("#dp-dienstgaenger-table tbody tr").removeClass("dp-dienstgaenger-selected");
+        tr.addClass("dp-dienstgaenger-selected");
+      });
+      radioTd.append(radio);
+      tr.append(radioTd);
+      tr.append($("<td>").text(d.dienstgrad || ""));
+      tr.append($("<td>").text(d.name));
+      tr.append($("<td>").text(d.abteilung || ""));
+      tr.append($("<td>").text(d.yearCount || 0));
+      tr.append($("<td>").text(d.monthCount || 0));
+      tbody.append(tr);
+    });
+  }
+
+  function saveDienstWithDienstgaenger(date, entry, dienstgaenger) {
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var list = web.get_lists().getByTitle(LIST_DIENTE);
+
+    var item;
+    if (entry && entry.Id) {
+      item = list.getItemById(entry.Id);
+    } else {
+      var createInfo = new SP.ListItemCreationInformation();
+      item = list.addItem(createInfo);
+    }
+
+    item.set_item("Title", ctx.dienstName || "Dienst");
+    item.set_item("DienstDatum", date);
+    item.set_item("Status", "Belegt");
+    item.set_item("Abteilung", dienstgaenger.abteilung || "");
+
+    var userVal = new SP.FieldUserValue();
+    userVal.set_lookupId(dienstgaenger.userId);
+    item.set_item("Dienstgaenger", userVal);
+
+    item.update();
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        var login = dienstgaenger.email || dienstgaenger.name;
+        var user = web.ensureUser(login);
+        ctxJsom.load(user);
+        ctxJsom.executeQueryAsync(
+          function () {
+            sendMailToUser(user, date);
+            closeDienstgaengerModal();
+            loadAndRenderServices();
+          },
+          function (s1, a1) {
+            console.error("Fehler beim Laden des Dienstgängers für Mail: " + a1.get_message());
+            closeDienstgaengerModal();
+            loadAndRenderServices();
+          }
+        );
+      },
+      function (s, a) {
+        console.error("Fehler beim Speichern des Dienstes: " + a.get_message());
+        alert("Fehler beim Speichern.");
+      }
+    );
+  }
+
+  function createLists() {
+    if (!ctx.isAdmin) {
+      alert("Nur Administratoren können Listen erstellen.");
+      return;
+    }
+
+    $("#dp-create-lists-status").text("Listen werden erstellt/aktualisiert ...");
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var lists = web.get_lists();
+    var adminListExisted = false;
+
+    try {
+      var adminList = lists.getByTitle(LIST_ADMINS);
+      ctxJsom.load(adminList);
+      ctxJsom.executeQueryAsync(
+        function () { adminListExisted = true; doCreateLists(adminListExisted); },
+        function () { adminListExisted = false; doCreateLists(adminListExisted); }
+      );
+    } catch (e) {
+      adminListExisted = false;
+      doCreateLists(adminListExisted);
+    }
+  }
+
+  function doCreateLists(adminListExisted) {
+    ensureListJsom(LIST_CONFIG, 100, [
+      { Name: "Feiertage", Type: "Note" },
+      { Name: "MailVorlageAssign", Type: "Note" },
+      { Name: "MailVorlageChangeOld", Type: "Note" },
+      { Name: "MailVorlageChangeNew", Type: "Note" },
+      { Name: "MailVorlageCancel", Type: "Note" },
+      { Name: "DienstName", Type: "Text" },
+      { Name: "DisableSaturday", Type: "Boolean" },
+      { Name: "DisableSunday", Type: "Boolean" }
+    ])
+      .then(function () {
+        return ensureListJsom(LIST_DIENTE, 100, [
+          { Name: "DienstDatum", Type: "DateTime" },
+          { Name: "Abteilung", Type: "Text" },
+          { Name: "Dienstgaenger", Type: "User" },
+          { Name: "Status", Type: "Choice", Choices: ["Offen", "Belegt", "Storniert", "KeinDienst"] }
+        ]);
+      })
+      .then(function () {
+        return ensureListJsom(LIST_ADMINS, 100, [
+          { Name: "Benutzer", Type: "User" }
+        ]);
+      })
+      .then(function () {
+        if (!adminListExisted) {
+          return addCurrentUserAsAdmin();
+        }
+      })
+      .then(function () {
+        return ensureListJsom(LIST_DIENSTGAENGER, 100, [
+          { Name: "Dienstgaenger", Type: "User" },
+          { Name: "Abteilung", Type: "Text" }
+        ]);
+      })
+      .then(function () {
+        $("#dp-create-lists-status").text("Listen vorhanden oder erfolgreich erstellt/aktualisiert.");
+        setDienstgaengerListLink();
+      })
+      .fail(function (msg) {
+        console.error("Fehler beim Erstellen/Aktualisieren der Listen: " + msg);
+        $("#dp-create-lists-status").text("Fehler beim Erstellen/Aktualisieren der Listen. Details in der Konsole.");
+      });
+  }
+
+  function addCurrentUserAsAdmin() {
+    var deferred = $.Deferred();
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var adminList = web.get_lists().getByTitle(LIST_ADMINS);
+
+    var ci = new SP.ListItemCreationInformation();
+    var item = adminList.addItem(ci);
+    var userVal = new SP.FieldUserValue();
+    userVal.set_lookupId(ctx.currentUserId);
+    item.set_item("Benutzer", userVal);
+    item.update();
+
+    ctxJsom.executeQueryAsync(
+      function () {
+        console.log("Aktueller Benutzer wurde als Admin eingetragen.");
+        deferred.resolve();
+      },
+      function (s, a) {
+        console.error("Fehler beim Eintragen des ersten Admins: " + a.get_message());
+        deferred.reject(a.get_message());
+      }
+    );
+
+    return deferred.promise();
+  }
+
+  function deleteLists() {
+    if (!ctx.isAdmin) {
+      alert("Nur Administratoren können Listen löschen.");
+      return;
+    }
+    if (!confirm("Achtung: Alle Listen (Dienste, Konfiguration, Admins, Dienstgänger) werden gelöscht. Fortfahren?")) {
+      return;
+    }
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var lists = web.get_lists();
+
+    function tryDelete(title) {
+      var d = $.Deferred();
+      try {
+        var list = lists.getByTitle(title);
+        list.deleteObject();
+        ctxJsom.executeQueryAsync(
+          function () { d.resolve(); },
+          function () { d.resolve(); }
+        );
+      } catch (e) {
+        d.resolve();
+      }
+      return d.promise();
+    }
+
+    $("#dp-create-lists-status").text("Listen werden gelöscht ...");
+
+    $.when(
+      tryDelete(LIST_DIENTE),
+      tryDelete(LIST_CONFIG),
+      tryDelete(LIST_ADMINS),
+      tryDelete(LIST_DIENSTGAENGER)
+    ).then(function () {
+      $("#dp-create-lists-status").text("Listen gelöscht. Bitte Seite neu laden oder Listen neu erstellen.");
+      ctx.isAdmin = true;
+    });
+  }
+
+  function ensureListJsom(title, baseTemplate, fields) {
+    var deferred = $.Deferred();
+
+    var ctxJsom = SP.ClientContext.get_current();
+    var web = ctxJsom.get_web();
+    var lists = web.get_lists();
+    var list;
+
+    try {
+      list = lists.getByTitle(title);
+      ctxJsom.load(list);
+      ctxJsom.executeQueryAsync(
+        function () {
+          ensureFieldsJsom(list, fields)
+            .then(function () { deferred.resolve(); })
+            .fail(function (e) { deferred.reject(e); });
+        },
+        function () {
+          var info = new SP.ListCreationInformation();
+          info.set_title(title);
+          info.set_templateType(baseTemplate);
+          list = lists.add(info);
+          ctxJsom.load(list);
+          ctxJsom.executeQueryAsync(
+            function () {
+              ensureFieldsJsom(list, fields)
+                .then(function () { deferred.resolve(); })
+                .fail(function (e) { deferred.reject(e); });
+            },
+            function (s2, a2) {
+              deferred.reject("Fehler beim Anlegen der Liste '" + title + "': " + a2.get_message());
+            }
+          );
+        }
+      );
+    } catch (e) {
+      deferred.reject("Fehler beim Zugriff auf Listen '" + title + "': " + e.message);
+    }
+
+    return deferred.promise();
+  }
+
+  function ensureFieldsJsom(list, fields) {
+    var deferred = $.Deferred();
+    if (!fields || !fields.length) { deferred.resolve(); return deferred.promise(); }
+
+    var ctxJsom = list.get_context();
+    var fieldsCollection = list.get_fields();
+
+    ctxJsom.load(fieldsCollection);
+    ctxJsom.executeQueryAsync(
+      function () {
+        var existingMap = {};
+        var e = fieldsCollection.getEnumerator();
+        while (e.moveNext()) {
+          var fld = e.get_current();
+          existingMap[fld.get_internalName()] = fld;
+        }
+
+        var index = 0;
+        function processNext() {
+          if (index >= fields.length) {
+            deferred.resolve();
+            return;
+          }
+
+          var f = fields[index++];
+          var internalName = f.Name;
+          var existingField = existingMap[internalName];
+
+          if (existingField) {
+            ctxJsom.executeQueryAsync(
+              function () { processNext(); },
+              function () { processNext(); }
+            );
+          } else {
+            var fieldXml;
+            switch (f.Type) {
+              case "Note":
+                fieldXml = "<Field Type='Note' DisplayName='" + f.Name + "' Name='" + f.Name + "' />";
+                break;
+              case "DateTime":
+                fieldXml = "<Field Type='DateTime' DisplayName='" + f.Name + "' Name='" + f.Name + "' Format='DateOnly' />";
+                break;
+              case "User":
+                fieldXml = "<Field Type='User' DisplayName='" + f.Name + "' Name='" + f.Name + "' UserSelectionMode='PeopleAndGroups' />";
+                break;
+              case "Choice":
+                var choices = (f.Choices || []).map(function (c) { return "<CHOICE>" + c + "</CHOICE>"; }).join("");
+                fieldXml =
+                  "<Field Type='Choice' DisplayName='" + f.Name + "' Name='" + f.Name + "'>" +
+                  "<CHOICES>" + choices + "</CHOICES></Field>";
+                break;
+              case "Boolean":
+                fieldXml = "<Field Type='Boolean' DisplayName='" + f.Name + "' Name='" + f.Name + "' />";
+                break;
+              default:
+                fieldXml = "<Field Type='Text' DisplayName='" + f.Name + "' Name='" + f.Name + "' />";
+            }
+
+            fieldsCollection.addFieldAsXml(fieldXml, true, SP.AddFieldOptions.defaultValue);
+            ctxJsom.executeQueryAsync(
+              function () { processNext(); },
+              function (s, a) {
+                console.warn("Feld '" + f.Name + "' konnte nicht angelegt werden: " + a.get_message());
+                processNext();
+              }
+            );
+          }
+        }
+
+        processNext();
+      },
+      function (s, a) {
+        console.error("Fehler beim Laden der Felddefinitionen: " + a.get_message());
+        deferred.reject(a.get_message());
+      }
+    );
+
+    return deferred.promise();
+  }
+
+})();
+</script>
+
+</body>
+</html>

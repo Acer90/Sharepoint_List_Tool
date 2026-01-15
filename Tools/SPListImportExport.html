@@ -1,0 +1,1751 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https://*; child-src 'none';" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SharePoint Listen Export / Import (JSOM Fields/Items)</title>
+  <style>
+  :root{
+    --berry: #b41069;
+    --bg: #f6f7f8;
+    --muted: #6b6b6b;
+    --card: #ffffff;
+    --radius: 6px;
+    --accent: var(--berry);
+  }
+  html,body{height:100%; margin:0; font-family:"Segoe UI",Arial,sans-serif; background:linear-gradient(180deg,#fff 0%,var(--bg) 100%);}
+  .se-container{max-width:980px;margin:24px auto; box-shadow:0 2px 12px rgba(0,0,0,0.06); background:var(--card); border-radius:var(--radius); overflow:hidden;}
+  .se-header{padding:20px 24px; background:linear-gradient(90deg, rgba(180,16,105,0.95) 0%, rgba(180,16,105,0.85) 100%); color:#fff}
+  .se-header h1{margin:0;font-weight:600}
+  .se-main{padding:20px; display:grid; gap:18px}
+  .se-panel{background:#fff;padding:16px;border-radius:6px;border:1px solid #eee}
+  label{display:block;margin-bottom:6px;color:var(--muted);font-size:.95rem}
+  input[type="url"],input[type="text"],input[type="file"]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box;margin-bottom:10px}
+  .se-row{display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap}
+  .se-btn{padding:8px 12px;background:#fff;border:1px solid #ccc;border-radius:4px;cursor:pointer}
+  .se-btn.primary{background:var(--accent);color:#fff;border-color:rgba(0,0,0,0.05)}
+  .se-divider{height:1px;background:#f1f1f1;margin:12px 0}
+  .se-progress{margin-top:10px;width:100%;background:#eee;border-radius:6px;overflow:hidden;height:18px;position:relative}
+  .se-progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#7f0a4f);transition:width 250ms ease}
+  .se-progress-text{margin-top:6px;font-size:.9rem;color:var(--muted)}
+  .se-subprogress{margin-top:6px;width:100%;background:#f1f1f1;border-radius:6px;overflow:hidden;height:10px;position:relative}
+  .se-subprogress-bar{height:100%;width:0%;background:linear-gradient(90deg,#6b6b6b,#b3b3b3);transition:width 200ms ease}
+  .se-subprogress-text{margin-top:4px;font-size:.85rem;color:var(--muted)}
+  .preview-list{max-height:300px;overflow:auto;border:1px dashed #eee;padding:8px;border-radius:4px}
+  .preview-item{padding:10px;border-bottom:1px solid #f6f6f6;display:flex;gap:12px;align-items:flex-start}
+  .preview-item:last-child{border-bottom:none}
+  .preview-item .meta{font-size:.9rem;color:var(--muted); flex: 1 1 auto;}
+  .preview-controls{display:flex; gap:12px; align-items:center; margin-left:12px; white-space:nowrap;}
+  .preview-controls label{display:flex; gap:6px; align-items:center; font-size:0.9rem; color:var(--muted);}
+  .tag-hidden{font-size:0.8rem;color:#fff;background:#777;padding:3px 6px;border-radius:12px;margin-left:8px}
+  .se-log{max-height:360px;overflow:auto;background:#101010;color:#cfcfcf;padding:12px;border-radius:4px;white-space:pre-wrap}
+  </style>
+
+  <script src="https://ustgber.ecm.bundeswehr.org/portale/P5619770115/Libs/Tools/SPListImportExport_Config.js"></script>
+</head>
+<body>
+  <div id="sp-list-import-export" class="se-container" role="application" aria-label="SharePoint List Export Import">
+    <header class="se-header">
+      <h1>Listen Export / Import</h1>
+    </header>
+
+    <main class="se-main">
+      <section class="se-panel" aria-labelledby="panel-site">
+        <h2 id="panel-site">Ziel-Site</h2>
+        <label for="siteUrl">Site-URL (vollständig, z. B. https://ustgber.ecm.bundeswehr.org/arbeitsbereiche/A5620202421)</label>
+        <input id="siteUrl" type="url" placeholder="https://ustgber.ecm.bundeswehr.org/arbeitsbereiche/A5620202421" />
+
+        <div class="se-row">
+          <button id="btnExport" class="se-btn primary">Alle Listen exportieren</button>
+          <div class="se-progress" id="exportProgressWrap" hidden>
+            <div class="se-progress-bar" id="exportProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <div id="exportProgressText" class="se-progress-text"></div>
+          <div class="se-subprogress" id="exportSubProgressWrap" hidden>
+            <div class="se-subprogress-bar" id="exportSubProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <div id="exportSubProgressText" class="se-subprogress-text"></div>
+        </div>
+
+        <div class="se-divider" aria-hidden="true"></div>
+
+        <h2>Import</h2>
+        <label for="importFile">JSON-Datei auswählen</label>
+        <input id="importFile" type="file" accept=".json,application/json" />
+        <div class="se-row">
+          <button id="btnPreview" class="se-btn" disabled>Vorschau laden</button>
+          <button id="btnImport" class="se-btn primary" disabled>Import starten</button>
+        </div>
+
+        <div class="se-progress" id="importProgressWrap" hidden>
+          <div class="se-progress-bar" id="importProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div id="importProgressText" class="se-progress-text"></div>
+
+        <div class="se-subprogress" id="importSubProgressWrap" hidden>
+          <div class="se-subprogress-bar" id="importSubProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div id="importSubProgressText" class="se-subprogress-text"></div>
+      </section>
+
+      <section class="se-panel" id="previewPanel" hidden>
+        <h2>Vorschau: Listen in der Importdatei</h2>
+        <p id="previewCount"></p>
+        <div id="previewList" class="preview-list" aria-live="polite"></div>
+        <div class="se-row" style="margin-top:8px">
+          <button id="btnSelectAll" class="se-btn">Alle auswählen</button>
+          <button id="btnDeselectAll" class="se-btn">Alle abwählen</button>
+        </div>
+      </section>
+
+      <section class="se-panel" id="logPanel" hidden>
+        <h2>Protokoll / Status</h2>
+        <pre id="logOutput" class="se-log" aria-live="polite"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script>
+  const PermissionsApi = (function(){
+    function resolveEndpoint(){
+      if (window.SPListImportExport_Config && window.SPListImportExport_Config.permissionsApiUrl){
+        return window.SPListImportExport_Config.permissionsApiUrl.replace(/\/$/,'');
+      }
+      return "https://webapps01.ecm.bundeswehr.org/shareextension";
+    }
+    function isConfigured(){ return !!resolveEndpoint(); }
+
+    async function setListPermissions(targetSiteUrl, listIdOrItem, permissionsPayload){
+      const base = resolveEndpoint();
+      const endpoint = base.replace(/\/$/,'') + "/setListPermissions";
+      const body = { SiteUrl: targetSiteUrl, Target: listIdOrItem, Permissions: permissionsPayload };
+
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        mode: "cors",
+        credentials: "include"
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Permissions API Fehler: ${resp.status} - ${text}`);
+      }
+      return resp.json();
+    }
+    return { isConfigured, setListPermissions };
+  })();
+  </script>
+
+  <script>
+  (function(){
+    function ready(fn){
+      if (window.jQuery && window.SP) return fn();
+      const check = setInterval(()=> { if (window.jQuery && window.SP) { clearInterval(check); fn(); } }, 150);
+      setTimeout(()=> { clearInterval(check); if (!(window.jQuery && window.SP)) console.warn("jQuery oder SP.js nicht verfügbar - einige Funktionen könnten fehlen."); }, 10000);
+    }
+
+    ready(function(){
+      const $ = window.jQuery;
+      const logEl = $("#logOutput");
+      const externalConfig = window.SPListImportExport_Config || null;
+      let loadedImportData = null;
+      let warnedNoItems = false;
+
+      const MAX_LOG_VAL = 500;
+
+      function fmtVal(val){
+        try { return JSON.stringify(val).slice(0,MAX_LOG_VAL); }
+        catch { return String(val).slice(0,MAX_LOG_VAL); }
+      }
+
+      function diagError(err){
+        if (!err) return "Unbekannter Fehler";
+        const parts = [];
+        if (err.message) parts.push("msg=" + err.message);
+        if (err.stack) parts.push("stack=" + err.stack);
+        if (err.responseText) parts.push("responseText=" + err.responseText.substring(0,400));
+        if (err.statusText) parts.push("statusText=" + err.statusText);
+        try {
+          if (err.get_message) parts.push("spMsg=" + err.get_message());
+          if (err.get_errorDetails) {
+            const det = err.get_errorDetails();
+            if (det) parts.push("details=" + JSON.stringify(det));
+          }
+        } catch(_){}
+        if (!parts.length) {
+          try { parts.push("json=" + JSON.stringify(err)); } catch(_){ parts.push(String(err)); }
+        }
+        return parts.join(" | ");
+      }
+
+      function log(msg){
+        const time = new Date().toLocaleTimeString();
+        const line = `[${time}] ${msg}`;
+        console.log(line);
+        logEl.text(logEl.text() + line + "\n");
+        $("#logPanel").show();
+      }
+
+      function downloadJson(obj, filename){
+        const data = JSON.stringify(obj, null, 2);
+        const blob = new Blob([data], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || "lists-export.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function escapeHtml(s){
+        return String(s||"").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+      }
+
+      function showProgress(wrapSel, barSel, textSel, percent, text){
+        $(wrapSel).show();
+        $(barSel).css("width", percent + "%").attr("aria-valuenow", percent);
+        $(textSel).text(text || percent + "%");
+      }
+      function resetProgress(wrapSel, barSel, textSel){
+        $(wrapSel).hide();
+        $(barSel).css("width","0%").attr("aria-valuenow", 0);
+        $(textSel).text("");
+      }
+      function showSubProgress(wrapSel, barSel, textSel, percent, text){
+        $(wrapSel).show();
+        $(barSel).css("width", percent + "%").attr("aria-valuenow", percent);
+        $(textSel).text(text || percent + "%");
+      }
+      function resetSubProgress(wrapSel, barSel, textSel){
+        $(wrapSel).hide();
+        $(barSel).css("width","0%").attr("aria-valuenow", 0);
+        $(textSel).text("");
+      }
+
+      const requestDigestCache = {};
+      function errToString(err, url){
+        if (!err) return "Unbekannter Fehler";
+        if (err.responseText) return `statusText=${err.statusText || ''}; response=${err.responseText.substring(0,400)}; url=${url||''}`;
+        if (err.statusText) return `statusText=${err.statusText}; url=${url||''}`;
+        if (err.message) return `${err.message}${url ? " | url="+url : ""}`;
+        try { return JSON.stringify(err); } catch { return String(err); }
+      }
+      function normalizeSite(siteUrl){
+        const base = siteUrl && siteUrl.trim() ? siteUrl.trim().replace(/\/$/,"") : (window._spPageContextInfo && _spPageContextInfo.webAbsoluteUrl) || "";
+        return base;
+      }
+      function normalizeListId(id){
+        if (!id) return "";
+        return id.replace(/[{}]/g,"");
+      }
+      function isGuid(id){
+        return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+      }
+      function buildListUrl(listId, suffix){
+        const norm = normalizeListId(listId);
+        if (isGuid(norm)) {
+          return `/_api/web/lists(guid'${norm}')${suffix||''}`;
+        }
+        const titleEsc = norm.replace(/'/g,"''");
+        return `/_api/web/lists/getByTitle('${titleEsc}')${suffix||''}`;
+      }
+
+      async function getRequestDigest(siteUrl){
+        const base = normalizeSite(siteUrl);
+        const key = base;
+        const cached = requestDigestCache[key];
+        if (cached && cached.expiry > Date.now()) return cached.value;
+        const ctxUrl = base + "/_api/contextinfo";
+        const resp = await $.ajax({ url: ctxUrl, method: "POST", headers: { "Accept": "application/json;odata=verbose" }, xhrFields:{withCredentials:true} });
+        const val = resp?.d?.GetContextWebInformation?.FormDigestValue;
+        const timeout = 30*60*1000;
+        requestDigestCache[key] = { value: val, expiry: Date.now()+timeout };
+        return val;
+      }
+      async function spGet(endpoint, siteUrl){
+        const base = normalizeSite(siteUrl);
+        const url = base + endpoint;
+        try {
+          return await $.ajax({ url, method: "GET", headers: { "Accept": "application/json;odata=verbose" }, xhrFields:{withCredentials:true} });
+        } catch (jqXHR) { throw new Error(errToString(jqXHR, url)); }
+      }
+      async function spPost(endpoint, payload, siteUrl){
+        const base = normalizeSite(siteUrl);
+        const url = base + endpoint;
+        const digest = await getRequestDigest(base);
+        try {
+          return await $.ajax({ url, method: "POST", data: JSON.stringify(payload), contentType: "application/json;odata=verbose", headers: { "Accept": "application/json;odata=verbose", "X-RequestDigest": digest }, xhrFields:{withCredentials:true} });
+        } catch (jqXHR) { throw new Error(errToString(jqXHR, url)); }
+      }
+      async function spMerge(endpoint, payload, siteUrl){
+        const base = normalizeSite(siteUrl);
+        const url = base + endpoint;
+        const digest = await getRequestDigest(base);
+        try {
+          return await $.ajax({ url, type: "POST", data: JSON.stringify(payload), contentType: "application/json;odata=verbose", headers: { "Accept": "application/json;odata=verbose", "IF-MATCH":"*", "X-HTTP-Method":"MERGE", "X-RequestDigest": digest }, xhrFields:{withCredentials:true} });
+        } catch (jqXHR) { throw new Error(errToString(jqXHR, url)); }
+      }
+
+      const NON_EDITABLE_INTERNALS = [
+        "ID","ContentType","ContentTypeId","Modified","Created","Author","Editor","_UIVersionString",
+        "Attachments","FileRef","FileDirRef","FileLeafRef","File_x0020_Type","DocIcon",
+        "ListItemEntityTypeFullName","AppAuthor","AppEditor"
+      ];
+      const READONLY_TYPES = ["computed"];
+      const EXCLUDED_ITEM_SELECT = [
+        "_ModerationComments","_ModerationStatus","_HasCopyDestinations","_CopySource","owshiddenversion","WorkflowVersion","_UIVersion",
+        "InstanceID","Order","GUID","WorkflowInstanceID","FSObjType","SortBehavior","UniqueId","SyncClientId","ProgId","ScopeId","MetaInfo",
+        "_Level","_IsCurrentVersion","ContentVersion","_ComplianceFlags","_ComplianceTag","_ComplianceTagWrittenTime","_ComplianceTagUserId",
+        "AccessPolicy","_VirusStatus","_VirusVendorID","_VirusInfo","SMTotalSize","SMLastModifiedDate","SMTotalFileStreamSize","SMTotalFileCount",
+        "Restricted","NoExecute","OriginatorId","Last_x0020_Modified","Created_x0020_Date","FolderChildCount","ItemChildCount",
+        "File_x0020_Size","CheckedOutUserId","IsCheckedoutToLocal","CheckoutUser","CheckedOutTitle","_CheckinComment","Modified_x0020_By","Created_x0020_By",
+        "HTML_x0020_File_x0020_Type","_SourceUrl","_SharedFileIndex","BSN","_ListSchemaVersion","_Dirty","_Parsable","_StubFile",
+        "_CommentFlags","_CommentCount","_LikeCount","ParentVersionString","ParentLeafName","DocConcurrencyNumber","ParentUniqueId","StreamHash",
+        "TemplateUrl","xd_ProgID","xd_Signature","_ShortcutUrl","_ShortcutSiteId","_ShortcutWebId","_ShortcutUniqueId",
+        "TaxCatchAll","TaxCatchAllLabel"
+      ];
+
+      function isUserCreatableField(f){
+        if (!f || !f.InternalName) return false;
+        const name = f.InternalName;
+        const type = (f.TypeAsString||'').toLowerCase();
+        if (NON_EDITABLE_INTERNALS.includes(name)) return false;
+        if (EXCLUDED_ITEM_SELECT.includes(name)) return false;
+        if (READONLY_TYPES.includes(type)) return false;
+        if (type === 'computed') return false;
+        return true;
+      }
+
+      function loadJsomContext(siteUrl){
+        return new Promise((resolve,reject)=>{
+          if (!window.SP || !SP.ClientContext) {
+            reject(new Error("SP.ClientContext nicht verfügbar"));
+            return;
+          }
+          try{
+            const base = siteUrl || (window._spPageContextInfo && _spPageContextInfo.webAbsoluteUrl) || "";
+            const ctx = new SP.ClientContext(base);
+            resolve(ctx);
+          }catch(e){ reject(e); }
+        });
+      }
+      function execQuery(ctx){
+        return new Promise((resolve,reject)=>{
+          ctx.executeQueryAsync(()=>resolve(),(s,a)=>reject(new Error(a.get_message())));
+        });
+      }
+
+      function parseLookupFromSchema(schemaXml){
+        if (!schemaXml) return { listId: null, showField: null };
+        let listId = null, showField = null;
+        const m = schemaXml.match(/List\s*=\s*"(\{?[0-9a-fA-F-]+\}?)/i);
+        if (m && m[1]) listId = m[1];
+        const sf = schemaXml.match(/ShowField\s*=\s*"([^"]+)"/i);
+        if (sf && sf[1]) showField = sf[1];
+        return { listId, showField };
+      }
+
+      function parseChoicesFromSchema(schemaXml){
+        if (!schemaXml) return null;
+        const choices = [];
+        const regex = /<CHOICE[^>]*>([\s\S]*?)<\/CHOICE>/gi;
+        let m;
+        while ((m = regex.exec(schemaXml)) !== null){
+          choices.push(m[1]);
+        }
+        return choices.length ? choices : null;
+      }
+
+      function serializeField(field){
+        const typeStr = (field.get_typeAsString && field.get_typeAsString()) ? field.get_typeAsString() : '';
+        let lookupListId = null;
+        let lookupField = null;
+        let choices = null;
+
+        const schemaXml = field.get_schemaXml ? field.get_schemaXml() : null;
+        if (typeStr.toLowerCase() === 'lookup'){
+          const lookupParsed = parseLookupFromSchema(schemaXml);
+          lookupListId = lookupParsed.listId;
+          lookupField = lookupParsed.showField || null;
+        }
+        if (typeStr.toLowerCase() === 'choice' || typeStr.toLowerCase() === 'multichoice'){
+          choices = parseChoicesFromSchema(schemaXml);
+        }
+
+        const obj = {
+          Title: field.get_title(),
+          InternalName: field.get_internalName(),
+          TypeAsString: typeStr,
+          Required: field.get_required(),
+          ReadOnlyField: field.get_readOnlyField(),
+          Hidden: field.get_hidden(),
+          SchemaXml: schemaXml,
+          LookupListId: lookupListId,
+          LookupField: lookupField,
+          LookupListTitle: null,
+          Choices: choices
+        };
+        return obj;
+      }
+
+      function normalizeFieldValue(v){
+        if (v === undefined) return null;
+        if (v === null) return null;
+        if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return v;
+        if (v instanceof Date) return v.toISOString();
+        if (v.get_lookupValue && v.get_lookupId){
+          return { LookupId: v.get_lookupId(), LookupValue: v.get_lookupValue() };
+        }
+        if (v.get_url && v.get_description){
+          return { Url: v.get_url(), Description: v.get_description() };
+        }
+        if (v.get_label && v.get_termGuid){
+          return { Label: v.get_label(), TermGuid: v.get_termGuid() };
+        }
+        if (Array.isArray(v)){
+          return v.map(x => normalizeFieldValue(x));
+        }
+        if (v.getEnumerator){
+          const arr = [];
+          const en = v.getEnumerator();
+          while (en.moveNext()){
+            arr.push(normalizeFieldValue(en.get_current()));
+          }
+          return arr;
+        }
+        if (typeof v === "object" && (v.Url || v.url)){
+          return { Url: v.Url || v.url, Description: v.Description || v.description || (v.Url || v.url) };
+        }
+        return v.toString ? v.toString() : v;
+      }
+
+      function isValidUrlString(str){
+        if (typeof str !== 'string') return false;
+        if (!str.trim()) return false;
+        return /^https?:\/\/\S+$/i.test(str) || /^\/\S+$/.test(str);
+      }
+
+      function toUrlValue(val){
+        let urlStr = null, desc = null;
+        if (typeof val === 'string'){
+          urlStr = val; desc = val;
+        } else if (val && (val.Url || val.url)){
+          urlStr = val.Url || val.url;
+          desc = val.Description || val.description || urlStr;
+        } else {
+          return null;
+        }
+        if (!isValidUrlString(urlStr)) return null;
+        const uv = new SP.FieldUrlValue();
+        uv.set_url(urlStr);
+        uv.set_description(desc || urlStr);
+        return uv.get_url() ? uv : null;
+      }
+
+      function normalizeGuidMaybe(g){
+        return g ? g.replace(/[{}]/g,'').toLowerCase() : null;
+      }
+
+      function topologicallySortLists(lists){
+        const titleMap = {};
+        const guidMap = {};
+        lists.forEach(l => {
+          titleMap[l.Title] = l;
+          if (l.Id) guidMap[normalizeGuidMaybe(l.Id)] = l;
+        });
+        const inDeg = {};
+        const adj = {};
+        lists.forEach(l => { inDeg[l.Title]=0; adj[l.Title]=[]; });
+
+        lists.forEach(l => {
+          (l.Fields||[]).forEach(f => {
+            if ((f.TypeAsString||'').toLowerCase()==='lookup'){
+              let depTitle = null;
+              if (f.LookupListTitle && titleMap[f.LookupListTitle]) {
+                depTitle = f.LookupListTitle;
+              } else if (f.LookupListId) {
+                const g = normalizeGuidMaybe(f.LookupListId);
+                if (g && guidMap[g]) depTitle = guidMap[g].Title;
+              }
+              if (depTitle && depTitle !== l.Title){
+                adj[depTitle].push(l.Title);
+                inDeg[l.Title] = (inDeg[l.Title]||0)+1;
+              }
+            }
+          });
+        });
+
+        const queue = [];
+        Object.keys(inDeg).forEach(t=>{ if(inDeg[t]===0) queue.push(t); });
+        const order = [];
+        while(queue.length){
+          const t = queue.shift();
+          order.push(t);
+          (adj[t]||[]).forEach(n=>{
+            inDeg[n]--;
+            if(inDeg[n]===0) queue.push(n);
+          });
+        }
+        const hasCycle = order.length !== lists.length;
+        return { order, hasCycle };
+      }
+
+      async function jsomGetFields(siteUrl, listId, listIdTitleMap){
+        const ctx = await loadJsomContext(siteUrl);
+        const list = ctx.get_web().get_lists().getById(listId);
+        const fields = list.get_fields();
+        ctx.load(fields, 'Include(Title,InternalName,TypeAsString,Required,ReadOnlyField,Hidden,SchemaXml)');
+        await execQuery(ctx);
+        const result = [];
+        const en = fields.getEnumerator();
+        while (en.moveNext()){
+          result.push(serializeField(en.get_current()));
+        }
+        if (listIdTitleMap){
+          result.forEach(f=>{
+            if ((f.TypeAsString||'').toLowerCase()==='lookup' && !f.LookupListTitle && f.LookupListId){
+              const t = listIdTitleMap[normalizeGuidMaybe(f.LookupListId)];
+              if (t) f.LookupListTitle = t;
+            }
+          });
+        }
+        return result.filter(isUserCreatableField);
+      }
+
+      async function restGetFields(siteUrl, listId){
+        const resp = await spGet(buildListUrl(listId, "/fields?$select=Title,InternalName,TypeAsString,Required,ReadOnlyField,Hidden,SchemaXml&$top=5000"), siteUrl);
+        const results = resp?.d?.results || [];
+        return results.map(f=>({
+          Title: f.Title,
+          InternalName: f.InternalName,
+          TypeAsString: f.TypeAsString,
+          Required: f.Required,
+          ReadOnlyField: f.ReadOnlyField,
+          Hidden: f.Hidden,
+          SchemaXml: f.SchemaXml,
+          LookupListId: parseLookupFromSchema(f.SchemaXml||'').listId,
+          LookupField: parseLookupFromSchema(f.SchemaXml||'').showField || null,
+          LookupListTitle: null,
+          Choices: null
+        })).filter(isUserCreatableField);
+      }
+
+      async function jsomGetListMeta(siteUrl, listId){
+        const ctx = await loadJsomContext(siteUrl);
+        const list = ctx.get_web().get_lists().getById(listId);
+        ctx.load(
+          list,
+          'Id',
+          'Title',
+          'BaseTemplate',
+          'Description',
+          'ItemCount',
+          'EnableVersioning',
+          'EnableMinorVersions',
+          'MajorVersionLimit',
+          'MajorWithMinorVersionsLimit',
+          'EnableModeration',
+          'HasUniqueRoleAssignments',
+          'Hidden',
+          'EnableAttachments',
+          'EnableFolderCreation',
+          'ForceCheckout',
+          'ListItemEntityTypeFullName',
+          'RootFolder'
+        );
+        await execQuery(ctx);
+        return {
+          Id: list.get_id().toString(),
+          Title: list.get_title(),
+          BaseTemplate: list.get_baseTemplate(),
+          Description: list.get_description(),
+          ItemCount: list.get_itemCount(),
+          EnableVersioning: list.get_enableVersioning(),
+          EnableMinorVersions: list.get_enableMinorVersions(),
+          MajorVersionLimit: list.get_majorVersionLimit(),
+          MajorWithMinorVersionsLimit: list.get_majorWithMinorVersionsLimit(),
+          EnableModeration: list.get_enableModeration(),
+          HasUniqueRoleAssignments: list.get_hasUniqueRoleAssignments(),
+          Hidden: list.get_hidden(),
+          EnableAttachments: list.get_enableAttachments(),
+          EnableFolderCreation: list.get_enableFolderCreation(),
+          ForceCheckout: list.get_forceCheckout(),
+          ListItemEntityTypeFullName: list.get_listItemEntityTypeFullName(),
+          RootFolderServerRelativeUrl: list.get_rootFolder().get_serverRelativeUrl()
+        };
+      }
+
+      async function restGetItems(siteUrl, listId, selectable, listMeta, isDocLib){
+        const PAGE = 2000;
+        const results = [];
+        const safeSel = [];
+        const baseFields = ["Id","FileRef","FileDirRef","FileLeafRef","FSObjType"];
+        const cap = 15; // limit select length to avoid URL too long
+        selectable.slice(0, cap).forEach(f=>safeSel.push(f));
+        const select = baseFields.concat(safeSel).join(",");
+        let url = buildListUrl(listId, `/_api/web/lists(guid'${normalizeListId(listId)}')/items?$select=${encodeURIComponent(select)}&$top=${PAGE}&$expand=FieldValuesAsText`);
+        // use items endpoint for simplicity
+        url = buildListUrl(listId, `/items?$select=${select}&$top=${PAGE}`);
+
+        while (url){
+          const resp = await spGet(url.replace(normalizeSite(siteUrl),""), siteUrl);
+          const rows = resp?.d?.results || [];
+          rows.forEach(r=>{
+            const obj = {};
+            baseFields.forEach(f=>{ if (r[f] !== undefined) obj[f] = r[f]; });
+            safeSel.forEach(f=>{ if (r[f] !== undefined) obj[f] = r[f]; });
+            results.push(obj);
+          });
+          url = resp?.d?.__next || null;
+        }
+        return results;
+      }
+
+      async function jsomGetItems(siteUrl, listId, fields, baseTemplate, listMeta, progressCb){
+        const exportItemsEnabled = externalConfig?.exportItems !== false;
+        if (!exportItemsEnabled) return [];
+        const isDocLib = baseTemplate === 101;
+
+        const selectable = fields
+          .filter(f =>
+            f.InternalName &&
+            !NON_EDITABLE_INTERNALS.includes(f.InternalName) &&
+            !READONLY_TYPES.includes((f.TypeAsString||"").toLowerCase()) &&
+            !EXCLUDED_ITEM_SELECT.includes(f.InternalName)
+          )
+          .map(f => f.InternalName);
+
+        const folderSystemFields = ["FileRef","FileDirRef","FileLeafRef","FSObjType"];
+        const matchFields = isDocLib ? ["FileRef","FileLeafRef"] : [];
+        let includeFields = ["Id"].concat(matchFields).concat(selectable).concat(folderSystemFields);
+
+        const wantAttachments = !isDocLib && listMeta && listMeta.EnableAttachments && (externalConfig?.exportAttachments !== false);
+        if (wantAttachments) includeFields.push("AttachmentFiles");
+        const includeStr = includeFields.join(",");
+
+        try {
+          const ctx = await loadJsomContext(siteUrl);
+          const list = ctx.get_web().get_lists().getById(listId);
+          const caml = new SP.CamlQuery();
+          caml.set_viewXml('<View Scope="RecursiveAll"><RowLimit>2000</RowLimit></View>');
+          const items = list.getItems(caml);
+          ctx.load(items, `Include(${includeStr})`);
+          await execQuery(ctx);
+
+          const results = [];
+          const totalHint = listMeta?.ItemCount || 0;
+          const en = items.getEnumerator();
+          let idx = 0;
+          while (en.moveNext()){
+            const it = en.get_current();
+            const obj = { Id: it.get_id() };
+            for (const name of matchFields){
+              try{ obj[name] = normalizeFieldValue(it.get_item(name)); }catch(e){ obj[name] = null; }
+            }
+            for (const name of selectable){
+              try{
+                obj[name] = normalizeFieldValue(it.get_item(name));
+              }catch(e){
+                obj[name] = null;
+              }
+            }
+            folderSystemFields.forEach(n=>{
+              try{ obj[n] = normalizeFieldValue(it.get_item(n)); }catch(_){}
+            });
+
+            if (wantAttachments){
+              try{
+                const af = it.get_attachmentFiles();
+                const attArr = [];
+                const afEn = af.getEnumerator();
+                while (afEn.moveNext()){
+                  const a = afEn.get_current();
+                  attArr.push({ FileName: a.get_fileName(), ServerRelativeUrl: a.get_serverRelativeUrl() });
+                }
+                obj._Attachments = attArr;
+              }catch(e){ obj._Attachments = []; }
+            }
+            results.push(obj);
+            idx++;
+            if (progressCb) {
+              const pct = totalHint > 0 ? Math.min(100, Math.round((idx/totalHint)*100)) : 0;
+              progressCb('items', idx, totalHint || '?', pct);
+            }
+          }
+          return results;
+        } catch(jsomErr){
+          log(`Warnung: JSOM Item-Export fehlgeschlagen (ListId=${listId}, DocLib=${isDocLib}): ${diagError(jsomErr)} | Fallback REST (ohne Attachments)`);
+          try {
+            const restItems = await restGetItems(siteUrl, listId, selectable, listMeta, isDocLib);
+            if (restItems.length) log(`REST-Fallback lieferte ${restItems.length} Items für ListId=${listId}.`);
+            return restItems;
+          } catch(restErr){
+            log(`REST Item-Export auch fehlgeschlagen (ListId=${listId}): ${diagError(restErr)}`);
+            return [];
+          }
+        }
+      }
+
+      function safeSet(msg, fn){
+        try { fn(); }
+        catch(e){ log(`Warnung: ${msg}: ${diagError(e)}`); }
+      }
+
+      async function jsomUpdateListSettings(siteUrl, listId, listObj){
+        const ctx = await loadJsomContext(siteUrl);
+        const list = ctx.get_web().get_lists().getById(listId);
+        const s = listObj.Versioning || {};
+        const adv = listObj.AdvancedSettings || {};
+        const isDocLib = listObj.BaseTemplate === 101;
+
+        const actions = [];
+        actions.push(() => safeSet("EnableVersioning", ()=> list.set_enableVersioning(!!s.EnableVersioning)));
+
+        if (s.EnableVersioning) {
+          actions.push(() => safeSet("EnableMinorVersions (only DocLib)", ()=> { if (isDocLib && typeof s.EnableMinorVersions !== "undefined") list.set_enableMinorVersions(!!s.EnableMinorVersions); }));
+          if (typeof s.MajorVersionLimit !== "undefined") actions.push(() => safeSet("MajorVersionLimit", ()=> list.set_majorVersionLimit(s.MajorVersionLimit)));
+          if (typeof s.MajorWithMinorVersionsLimit !== "undefined") actions.push(() => safeSet("MajorWithMinorVersionsLimit", ()=> list.set_majorWithMinorVersionsLimit(s.MajorWithMinorVersionsLimit)));
+        }
+
+        if (typeof s.EnableModeration !== "undefined") actions.push(()=> safeSet("EnableModeration", ()=> list.set_enableModeration(!!s.EnableModeration)));
+
+        if (typeof adv.EnableAttachments !== "undefined") actions.push(()=> safeSet("EnableAttachments", ()=> list.set_enableAttachments(!!adv.EnableAttachments)));
+        if (typeof adv.EnableFolderCreation !== "undefined") actions.push(()=> safeSet("EnableFolderCreation", ()=> list.set_enableFolderCreation(!!adv.EnableFolderCreation)));
+        if (isDocLib && typeof adv.ForceCheckout !== "undefined") actions.push(()=> safeSet("ForceCheckout", ()=> list.set_forceCheckout(!!adv.ForceCheckout)));
+
+        actions.forEach(fn=>fn());
+        list.update();
+        try {
+          await execQuery(ctx);
+        } catch(e){
+          log(`Warnung: Einstellungen (JSOM) für '${listObj.Title}' fehlgeschlagen: ${diagError(e)} | Versioning=${fmtVal(s)} | Advanced=${fmtVal(adv)} | BaseTemplate=${listObj.BaseTemplate}`);
+          throw e;
+        }
+      }
+
+      async function jsomUpsertViews(siteUrl, listId, views){
+        if (!Array.isArray(views) || views.length === 0) {
+          log("Keine Views zu importieren.");
+          return;
+        }
+        log(`Starte View-Import (JSOM) für Liste ${listId}: ${views.length} Views`);
+        const ctx = await loadJsomContext(siteUrl);
+        const list = ctx.get_web().get_lists().getById(listId);
+        const viewCollection = list.get_views();
+        ctx.load(viewCollection, 'Include(Title,Id)');
+        await execQuery(ctx);
+
+        const existingMap = {};
+        const enumerator = viewCollection.getEnumerator();
+        while (enumerator.moveNext()){
+          const v = enumerator.get_current();
+          existingMap[v.get_title()] = v;
+        }
+
+        for (const v of views){
+          try{
+            let viewObj = existingMap[v.Title];
+            if (!viewObj){
+              const vcInfo = new SP.ViewCreationInformation();
+              vcInfo.set_title(v.Title);
+              if (v.ViewFields && v.ViewFields.length > 0) vcInfo.set_viewFields(v.ViewFields);
+              vcInfo.set_rowLimit(v.RowLimit || 30);
+              if (v.ViewQuery) vcInfo.set_query(v.ViewQuery);
+              viewObj = viewCollection.add(vcInfo);
+            } else {
+              viewObj.set_rowLimit(v.RowLimit || 30);
+              viewObj.set_viewQuery(v.ViewQuery || "");
+            }
+
+            if (typeof v.DefaultView !== "undefined") viewObj.set_defaultView(!!v.DefaultView);
+            if (typeof v.Hidden !== "undefined") viewObj.set_hidden(!!v.Hidden);
+
+            if (Array.isArray(v.ViewFields)){
+              const vf = viewObj.get_viewFields();
+              vf.removeAll();
+              for (const fld of v.ViewFields){
+                vf.add(fld);
+              }
+            }
+
+            viewObj.update();
+            log(`View '${v.Title}' verarbeitet.`);
+          }catch(viewErr){
+            log(`Warnung: View '${v.Title}' konnte nicht gesetzt werden: ${diagError(viewErr)}`);
+          }
+        }
+        await execQuery(ctx);
+        log(`View-Import abgeschlossen.`);
+      }
+
+      async function jsomExportViews(siteUrl, listId){
+        const ctx = await loadJsomContext(siteUrl);
+        const list = ctx.get_web().get_lists().getById(listId);
+        const views = list.get_views();
+        ctx.load(views, 'Include(Title,PersonalView,DefaultView,Hidden,ViewQuery,RowLimit,ViewType,ViewFields)');
+        await execQuery(ctx);
+
+        const result = [];
+        const en = views.getEnumerator();
+        while (en.moveNext()){
+          const v = en.get_current();
+          const vf = v.get_viewFields();
+          const fieldsArr = [];
+          const vfEn = vf.getEnumerator();
+          while (vfEn.moveNext()){
+            fieldsArr.push(vfEn.get_current());
+          }
+          result.push({
+            Title: v.get_title(),
+            PersonalView: v.get_personalView(),
+            DefaultView: v.get_defaultView(),
+            Hidden: v.get_hidden(),
+            ViewQuery: v.get_viewQuery(),
+            RowLimit: v.get_rowLimit(),
+            ViewType: v.get_viewType(),
+            ViewFields: fieldsArr
+          });
+        }
+        return result;
+      }
+
+      async function exportViews(siteUrl, listId){
+        try {
+          return await jsomExportViews(siteUrl, listId);
+        } catch(jsomErr){
+          log(`Warnung: JSOM View-Export fehlgeschlagen (ListId=${listId}): ${diagError(jsomErr)}`);
+          try {
+            const resp = await spGet(buildListUrl(listId, "/views?$select=Title,PersonalView,DefaultView,Hidden,ViewQuery,RowLimit,ViewType,ViewFields&$expand=ViewFields"), siteUrl);
+            return (resp?.d?.results || []).map(v => ({
+              Title: v.Title,
+              PersonalView: v.PersonalView,
+              DefaultView: v.DefaultView,
+              Hidden: v.Hidden,
+              ViewQuery: v.ViewQuery,
+              RowLimit: v.RowLimit,
+              ViewType: v.ViewType,
+              ViewFields: (v.ViewFields && v.ViewFields.results) ? v.ViewFields.results : []
+            }));
+          } catch(restErr){
+            log(`Warnung: Views konnten nicht exportiert werden (REST) für ListId=${listId}: ${diagError(restErr)}`);
+            return [];
+          }
+        }
+      }
+
+      const lookupValueCache = {};
+      async function loadLookupMap(targetSiteUrl, lookupListId, lookupField){
+        const key = `${lookupListId}|${lookupField||'Title'}`;
+        if (lookupValueCache[key]) return lookupValueCache[key];
+        const selectField = lookupField || 'Title';
+        try{
+          const resp = await spGet(`/_api/web/lists(guid'${lookupListId}')/items?$select=Id,${selectField}&$top=5000`, targetSiteUrl);
+          const map = {};
+          const rows = resp?.d?.results || [];
+          rows.forEach(r=>{
+            const val = r[selectField];
+            if (val !== undefined && val !== null){
+              map[String(val).toLowerCase()] = r.Id;
+            }
+          });
+          lookupValueCache[key] = map;
+          return map;
+        }catch(e){
+          log(`Warnung: Lookup-Map konnte nicht geladen werden (List ${lookupListId}): ${diagError(e)}`);
+          lookupValueCache[key] = {};
+          return {};
+        }
+      }
+
+      function toLookupValue(val){
+        const lv = new SP.FieldLookupValue();
+        lv.set_lookupId(val.LookupId || val.lookupId || val);
+        return lv;
+      }
+
+      async function loadAvailableFieldSet(ctx, list){
+        const fields = list.get_fields();
+        ctx.load(fields, 'Include(InternalName,Title)');
+        await execQuery(ctx);
+        const set = {};
+        const titleToInternal = {};
+        const en = fields.getEnumerator();
+        while (en.moveNext()){
+          const f = en.get_current();
+          set[f.get_internalName()] = true;
+          titleToInternal[f.get_title()] = f.get_internalName();
+        }
+        return { set, titleToInternal };
+      }
+
+      function getUserEditableFieldNames(listObj){
+        const editable = [];
+        (listObj.Fields || []).forEach(f=>{
+          const t = (f.TypeAsString||'').toLowerCase();
+          if (NON_EDITABLE_INTERNALS.includes(f.InternalName)) return;
+          if (EXCLUDED_ITEM_SELECT.includes(f.InternalName)) return;
+          if (READONLY_TYPES.includes(t)) return;
+          if (t === 'computed') return;
+          editable.push(f.InternalName);
+        });
+        return editable;
+      }
+
+      function buildItemSignature(itemData, fieldNames){
+        const sigParts = [];
+        for (const name of fieldNames){
+          const v = itemData[name];
+          sigParts.push(name + ':' + JSON.stringify(v ?? null));
+        }
+        return sigParts.join('|');
+      }
+
+      async function loadExistingItemSignatureMap(ctx, list, fieldNames){
+        if (!fieldNames.length) return {};
+        const select = ['Id'].concat(fieldNames).join(',');
+        const caml = new SP.CamlQuery();
+        caml.set_viewXml('<View Scope="RecursiveAll"><RowLimit>2000</RowLimit></View>');
+        const items = list.getItems(caml);
+        ctx.load(items, `Include(${select})`);
+        await execQuery(ctx);
+        const map = {};
+        const en = items.getEnumerator();
+        while (en.moveNext()){
+          const it = en.get_current();
+          const obj = {};
+          for (const n of fieldNames){
+            try { obj[n] = normalizeFieldValue(it.get_item(n)); } catch { obj[n] = null; }
+          }
+          const sig = buildItemSignature(obj, fieldNames);
+          map[sig] = it.get_id();
+        }
+        return map;
+      }
+
+      function isFolderItem(itemData){
+        const fs = itemData && (itemData.FSObjType ?? itemData.FileSystemObjectType);
+        return fs === 1 || fs === "1";
+      }
+      function pathDepth(fileRef){
+        if (!fileRef) return 0;
+        return String(fileRef).split('/').length;
+      }
+
+      function setFieldValue(itemObj, fieldDef, value, fieldLogPrefix, opts){
+        const isFolder = opts?.isFolder;
+        if (value === null || value === undefined) return;
+        const t = (fieldDef.TypeAsString || '').toLowerCase();
+
+        if (isFolder && t === 'url') {
+          log(`${fieldLogPrefix} URL-Feld auf Ordner übersprungen (Ordner setzen keine URLs).`);
+          return;
+        }
+
+        if (t === 'lookup' || t === 'lookupmulti'){
+          try{
+            if (Array.isArray(value)){
+              const arr = value.map(toLookupValue).filter(Boolean);
+              itemObj.set_item(fieldDef.InternalName, arr);
+            } else {
+              const lv = toLookupValue(value);
+              if (lv) itemObj.set_item(fieldDef.InternalName, lv);
+            }
+          }catch(e){
+            log(`${fieldLogPrefix} Lookup konnte nicht gesetzt werden: ${diagError(e)}`);
+          }
+          return;
+        }
+        if (t === 'choice'){
+          itemObj.set_item(fieldDef.InternalName, value);
+          return;
+        }
+        if (t === 'multichoice'){
+          itemObj.set_item(fieldDef.InternalName, Array.isArray(value) ? value : [value]);
+          return;
+        }
+        if (t === 'url'){
+          const uv = toUrlValue(value);
+          if (!uv){
+            log(`${fieldLogPrefix} URL ungültig/leer, übersprungen. Wert=${fmtVal(value)}`);
+            return;
+          }
+          itemObj.set_item(fieldDef.InternalName, uv);
+          return;
+        }
+        if (t === 'boolean'){
+          itemObj.set_item(fieldDef.InternalName, !!value);
+          return;
+        }
+        if (t === 'number' || t === 'currency'){
+          const num = Number(value);
+          if (!Number.isNaN(num)) itemObj.set_item(fieldDef.InternalName, num);
+          return;
+        }
+        if (t === 'datetime'){
+          const d = value ? new Date(value) : null;
+          if (d && !isNaN(d.getTime())) itemObj.set_item(fieldDef.InternalName, d);
+          return;
+        }
+        if (t === 'user' || t === 'usermulti' || t === 'taxonomy'){
+          log(`${fieldLogPrefix} User/Taxonomy nicht remapped, übersprungen.`);
+          return;
+        }
+        itemObj.set_item(fieldDef.InternalName, value);
+      }
+
+      function resolveDocLibFileRef(itemData){
+        if (typeof itemData.FileRef === 'string') return itemData.FileRef;
+        if (itemData.FileRef && (itemData.FileRef.LookupValue || itemData.FileRef.lookupValue)) return itemData.FileRef.LookupValue || itemData.FileRef.lookupValue;
+        if (typeof itemData.FileLeafRef === 'string') return itemData.FileLeafRef;
+        return null;
+      }
+
+      async function findDocLibItemByFileRef(ctx, list, fileRef){
+        if (!fileRef || typeof fileRef !== 'string') return null;
+        const caml = new SP.CamlQuery();
+        caml.set_viewXml(`<View><Query><Where><Eq><FieldRef Name='FileRef'/><Value Type='Text'>${fileRef.replace(/&/g,'&amp;')}</Value></Eq></Where></Query><RowLimit>1</RowLimit></View>`);
+        const items = list.getItems(caml);
+        ctx.load(items, 'Include(Id,FileRef)');
+        await execQuery(ctx);
+        const en = items.getEnumerator();
+        return en.moveNext() ? en.get_current() : null;
+      }
+
+      async function downloadAttachmentFromSource(url){
+        const resp = await fetch(url, { credentials: "include" });
+        if (!resp.ok) throw new Error(`Download fehlgeschlagen (${resp.status})`);
+        return await resp.blob();
+      }
+
+      async function uploadAttachmentToTarget(targetSiteUrl, listId, itemId, fileName, blob){
+        const base = normalizeSite(targetSiteUrl);
+        const digest = await getRequestDigest(base);
+        const escapedName = encodeURIComponent(fileName).replace(/%27/g,"''");
+        const endpoint = base + buildListUrl(listId, `/items(${itemId})/AttachmentFiles/add(FileName='${escapedName}')`);
+        await $.ajax({
+          url: endpoint,
+          type: "POST",
+          data: blob,
+          processData: false,
+          contentType: blob.type || "application/octet-stream",
+          headers: { "Accept": "application/json;odata=verbose", "X-RequestDigest": digest },
+          xhrFields: { withCredentials: true }
+        });
+      }
+
+      const targetRootCache = {};
+      async function getTargetListRoot(siteUrl, listId){
+        const key = `${normalizeSite(siteUrl)}|${normalizeListId(listId)}`;
+        if (targetRootCache[key]) return targetRootCache[key];
+        const resp = await spGet(buildListUrl(listId, "?$select=RootFolder/ServerRelativeUrl&$expand=RootFolder"), siteUrl);
+        const val = resp?.d?.RootFolder?.ServerRelativeUrl || null;
+        targetRootCache[key] = val;
+        return val;
+      }
+
+      function deriveSourceRoot(listObj){
+        if (listObj._sourceRootDerived) return listObj._sourceRoot;
+        const candidate = (listObj.Items || []).find(i => i.FileDirRef)?.FileDirRef || null;
+        listObj._sourceRoot = candidate;
+        listObj._sourceRootDerived = true;
+        return listObj._sourceRoot;
+      }
+
+      function buildTargetFolderUrl(listObj, fileDirRef, targetRoot){
+        const srcRoot = deriveSourceRoot(listObj);
+        let rel = fileDirRef || "";
+        if (srcRoot && rel.toLowerCase().startsWith(srcRoot.toLowerCase())) rel = rel.slice(srcRoot.length);
+        rel = rel.replace(/^\/+/,'');
+        if (!rel) return targetRoot;
+        return (targetRoot || "").replace(/\/$/,'') + "/" + rel;
+      }
+
+      async function ensureFolderItem(ctx, list, listObj, itemData, targetSiteUrl, targetListId){
+        const folderUrl = await getTargetListRoot(targetSiteUrl || normalizeSite(), targetListId);
+        if (!folderUrl) throw new Error("Konnte RootFolder nicht ermitteln");
+        const targetFolderUrl = buildTargetFolderUrl(listObj, itemData.FileDirRef, folderUrl);
+        const leaf = itemData.FileLeafRef || itemData.Title || "Neuer Ordner";
+
+        // Prüfen ob bereits existiert
+        const caml = new SP.CamlQuery();
+        caml.set_viewXml(`<View Scope="RecursiveAll"><Query><Where><And><Eq><FieldRef Name='FileDirRef'/><Value Type='Text'>${targetFolderUrl.replace(/&/g,'&amp;')}</Value></Eq><Eq><FieldRef Name='FileLeafRef'/><Value Type='Text'>${leaf.replace(/&/g,'&amp;')}</Value></Eq></And></Where></Query><RowLimit>1</RowLimit></View>`);
+        const items = list.getItems(caml);
+        ctx.load(items, 'Include(Id,FileRef)');
+        await execQuery(ctx);
+        const en = items.getEnumerator();
+        if (en.moveNext()) return en.get_current(); // existiert
+
+        const ci = new SP.ListItemCreationInformation();
+        ci.set_underlyingObjectType(SP.FileSystemObjectType.folder);
+        ci.set_leafName(leaf);
+        if (targetFolderUrl) ci.set_folderUrl(targetFolderUrl);
+        const newItem = list.addItem(ci);
+        newItem.update();
+        await execQuery(ctx);
+        return newItem;
+      }
+
+      async function jsomImportItems(targetSiteUrl, listId, listObj, titleToIdMap){
+        const importItemsEnabled = externalConfig?.importItems !== false;
+        if (!importItemsEnabled) return;
+        if (!Array.isArray(listObj.Items) || listObj.Items.length === 0) {
+          log(`Keine Items zu importieren für '${listObj.Title}'.`);
+          return;
+        }
+
+        const ctx = await loadJsomContext(targetSiteUrl || normalizeSite());
+        const list = ctx.get_web().get_lists().getById(listId);
+
+        const availableFieldInfo = await loadAvailableFieldSet(ctx, list);
+        const availableFields = availableFieldInfo.set;
+        const titleToInternal = availableFieldInfo.titleToInternal;
+        const fieldsMap = {};
+        (listObj.Fields || []).forEach(f => { fieldsMap[f.InternalName] = f; });
+
+        const isDocLib = listObj.BaseTemplate === 101;
+        const allowAttachments = !isDocLib && listObj.AdvancedSettings && listObj.AdvancedSettings.EnableAttachments !== false && (externalConfig?.importAttachments !== false);
+
+        const signatureFields = isDocLib ? [] : getUserEditableFieldNames(listObj).filter(n => availableFields[n]);
+        let existingSignatures = {};
+        if (!isDocLib && signatureFields.length){
+          try {
+            existingSignatures = await loadExistingItemSignatureMap(ctx, list, signatureFields);
+            log(`Duplicate-Check aktiv für '${listObj.Title}' mit ${Object.keys(existingSignatures).length} vorhandenen Signaturen.`);
+          } catch(e){
+            log(`Warnung: Duplicate-Check konnte nicht vorbereitet werden: ${diagError(e)}`);
+          }
+        }
+
+        const totalItems = listObj.Items.length;
+        let itemCounter = 0;
+
+        const folders = listObj.Items.filter(it => isFolderItem(it)).sort((a,b)=>pathDepth(a.FileRef||"")-pathDepth(b.FileRef||""));
+        const normals = listObj.Items.filter(it => !isFolderItem(it));
+
+        async function processItem(itemData){
+          try{
+            const isFolder = isFolderItem(itemData);
+            let listItem = null;
+
+            if (isDocLib){
+              const fileRef = resolveDocLibFileRef(itemData);
+              if (!fileRef && !isFolder){
+                log(`Info: Kein gültiger FileRef für Dokument, Item übersprungen. Item=${fmtVal(itemData)}`);
+                itemCounter++; showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((itemCounter/totalItems)*100), `Items ${itemCounter}/${totalItems}`);
+                return;
+              }
+              if (isFolder){
+                listItem = await ensureFolderItem(ctx, list, listObj, itemData, targetSiteUrl || normalizeSite(), listId);
+              } else {
+                listItem = await findDocLibItemByFileRef(ctx, list, fileRef);
+                if (!listItem){
+                  log(`Info: Datei '${fileRef}' nicht gefunden, Item wird übersprungen.`);
+                  itemCounter++; showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((itemCounter/totalItems)*100), `Items ${itemCounter}/${totalItems}`);
+                  return;
+                }
+              }
+            } else {
+              if (isFolder){
+                listItem = await ensureFolderItem(ctx, list, listObj, itemData, targetSiteUrl || normalizeSite(), listId);
+              } else {
+                if (signatureFields.length){
+                  const sig = buildItemSignature(itemData, signatureFields);
+                  if (existingSignatures[sig]){
+                    log(`Info: Item bereits vorhanden (Signatur-Match), übersprungen. ItemId=${existingSignatures[sig]} Liste='${listObj.Title}'`);
+                    itemCounter++; showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((itemCounter/totalItems)*100), `Items ${itemCounter}/${totalItems}`);
+                    return;
+                  }
+                }
+                const ci = new SP.ListItemCreationInformation();
+                const rootTarget = await getTargetListRoot(targetSiteUrl || normalizeSite(), listId);
+                if (itemData.FileDirRef && rootTarget){
+                  const targetFolderUrl = buildTargetFolderUrl(listObj, itemData.FileDirRef, rootTarget);
+                  ci.set_folderUrl(targetFolderUrl);
+                }
+                listItem = list.addItem(ci);
+              }
+            }
+
+            for (const [k,v] of Object.entries(itemData)){
+              if (k === "Id" || k === "FileRef" || k === "FileDirRef" || k === "FileLeafRef" || k === "FSObjType" || k === "_Attachments") continue;
+              if (NON_EDITABLE_INTERNALS.includes(k)) continue;
+              if (EXCLUDED_ITEM_SELECT.includes(k)) continue;
+
+              let def = fieldsMap[k];
+              let effectiveName = k;
+
+              if (!availableFields[effectiveName]) {
+                const altInternal = def ? titleToInternal[def.Title] : null;
+                if (altInternal){
+                  effectiveName = altInternal;
+                  if (def){
+                    def = Object.assign({}, def, { InternalName: effectiveName });
+                    fieldsMap[effectiveName] = def;
+                  }
+                  availableFields[effectiveName] = true;
+                  log(`Info: Feld '${k}' im Ziel als '${effectiveName}' gefunden (Title-Match).`);
+                } else {
+                  log(`Info: Feld '${k}' existiert im Ziel nicht, übersprungen (Item '${listObj.Title}').`);
+                  continue;
+                }
+              }
+
+              if (!def) def = { InternalName: effectiveName, TypeAsString: null, LookupListId: null, LookupField: null };
+
+              if ((def.TypeAsString || '').toLowerCase() === 'computed') continue;
+
+              let value = v;
+              if ((def.TypeAsString || '').toLowerCase().startsWith('lookup')){
+                const targetLookupListId = def._TargetLookupListId
+                  || (def.LookupListTitle && titleToIdMap[def.LookupListTitle] ? normalizeListId(titleToIdMap[def.LookupListTitle]) : null)
+                  || (def.LookupListId ? normalizeListId(def.LookupListId) : null);
+                if (targetLookupListId && v){
+                  const lookupFieldName = def.LookupField || 'Title';
+                  const cache = await loadLookupMap(targetSiteUrl || normalizeSite(), targetLookupListId, lookupFieldName);
+                  const mapOne = (entry)=>{
+                    if (!entry) return null;
+                    const key = String(entry.LookupValue || entry.lookupValue || entry.LookupId || entry).toLowerCase();
+                    const newId = cache[key];
+                    if (!newId) return null;
+                    return { LookupId: newId, LookupValue: entry.LookupValue || entry.lookupValue || entry.LookupValue };
+                  };
+                  if (Array.isArray(v)) value = v.map(mapOne).filter(Boolean);
+                  else value = mapOne(v);
+                }
+              }
+
+              const fieldLogPrefix = `Item '${listObj.Title}' Feld '${effectiveName}':`;
+              try{
+                setFieldValue(listItem, Object.assign({}, def, { InternalName: effectiveName }), value, fieldLogPrefix, { isFolder });
+              }catch(setErr){
+                log(`${fieldLogPrefix} Fehler beim Setzen: ${diagError(setErr)}, Wert=${fmtVal(value)}`);
+              }
+            }
+
+            listItem.update();
+            await execQuery(ctx);
+            const newItemId = listItem.get_id();
+
+            if (!isFolder && allowAttachments && Array.isArray(itemData._Attachments) && itemData._Attachments.length){
+              for (const att of itemData._Attachments){
+                try{
+                  const srcBase = (loadedImportData && loadedImportData.siteUrl) ? loadedImportData.siteUrl.replace(/\/$/,'') : normalizeSite();
+                  const absUrl = att.ServerRelativeUrl && att.ServerRelativeUrl.startsWith("/")
+                    ? srcBase + att.ServerRelativeUrl
+                    : att.ServerRelativeUrl;
+                  const blob = await downloadAttachmentFromSource(absUrl);
+                  await uploadAttachmentToTarget(targetSiteUrl || normalizeSite(), listId, newItemId, att.FileName || "attachment.bin", blob);
+                  log(`Attachment '${att.FileName}' importiert für Item ${newItemId} (${listObj.Title}).`);
+                }catch(attErr){
+                  log(`Warnung: Attachment '${att && att.FileName ? att.FileName : '?'}' konnte nicht importiert werden: ${diagError(attErr)}`);
+                }
+              }
+            }
+
+            itemCounter++;
+            showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((itemCounter/totalItems)*100), `Items ${itemCounter}/${totalItems}`);
+            log(`Item importiert/aktualisiert in '${listObj.Title}'.`);
+          }catch(e){
+            log(`Warnung: Item konnte nicht importiert werden in '${listObj.Title}': ${diagError(e)}; Daten=${fmtVal(itemData)}`);
+            itemCounter++;
+            showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((itemCounter/totalItems)*100), `Items ${itemCounter}/${totalItems}`);
+          }
+        }
+
+        for (const f of folders){ await processItem(f); }
+        for (const n of normals){ await processItem(n); }
+
+        log(`Items (JSOM) importiert für '${listObj.Title}'.`);
+      }
+
+      async function exportAllLists(siteUrlInput){
+        try {
+          $("#btnExport").prop("disabled", true);
+          resetSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText");
+          const siteUrl = normalizeSite(siteUrlInput);
+          log(`Starte Export mit Site-URL: ${siteUrl}`);
+          const listsResp = await spGet("/_api/web/lists?$select=Id,Title,BaseTemplate,ItemCount,Hidden", siteUrl);
+          const lists = listsResp.d.results;
+          log(`Gefundene Listen (inkl. versteckte): ${lists.length}`);
+
+          const listIdTitleMap = {};
+          lists.forEach(l => { listIdTitleMap[normalizeGuidMaybe(l.Id)] = l.Title; });
+
+          const exportObj = { exportedAt: (new Date()).toISOString(), siteUrl: siteUrl, lists: [], configUsed: externalConfig || null };
+
+          for (let i=0;i<lists.length;i++){
+            const list = lists[i];
+            if (externalConfig?.ignoreLists?.includes(list.Title)) { log(`Überspringe: ${list.Title}`); continue; }
+            if (externalConfig?.ignorePatterns?.some(p => { try { return new RegExp(p,'i').test(list.Title); } catch { return false; } })) { log(`Überspringe (pattern): ${list.Title}`); continue; }
+
+            showProgress("#exportProgressWrap","#exportProgress","#exportProgressText", Math.round((i/lists.length)*100), `Verarbeite ${i+1}/${lists.length}: ${list.Title}`);
+            showSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText", 0, `Liste ${i+1}/${lists.length}: Felder/Items...`);
+
+            let listInfo = null;
+            try {
+              listInfo = await jsomGetListMeta(siteUrl, list.Id);
+            } catch(eMeta){
+              log(`Fehler beim Laden der Meta-Daten für '${list.Title}' (Id=${list.Id}): ${diagError(eMeta)} | übersprungen`);
+              continue;
+            }
+
+            let fields = [];
+            try {
+              fields = await jsomGetFields(siteUrl, list.Id, listIdTitleMap);
+            } catch(eFields){
+              log(`Warnung: JSOM Feld-Export fehlgeschlagen für '${list.Title}' (Id=${list.Id}). Fallback REST. Ursache: ${diagError(eFields)}`);
+              try {
+                fields = await restGetFields(siteUrl, list.Id);
+                log(`REST-Felder geladen: ${fields.length} für '${list.Title}'`);
+              } catch(eFieldsRest){
+                log(`Fehler beim Feld-Export (REST) für '${list.Title}' (Id=${list.Id}): ${diagError(eFieldsRest)} | übersprungen`);
+                continue;
+              }
+            }
+            showSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText", 15, `Felder: ${fields.length}`);
+
+            let views = [];
+            try {
+              views = await exportViews(siteUrl, list.Id);
+            } catch(eViews){
+              log(`Warnung: View-Export fehlgeschlagen für '${list.Title}' (Id=${list.Id}): ${diagError(eViews)}`);
+            }
+            showSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText", 30, `Views: ${views.length}`);
+
+            let items = [];
+            try {
+              items = await jsomGetItems(siteUrl, list.Id, fields, listInfo.BaseTemplate, listInfo, (kind, idx, totalHint, pct)=>{
+                showSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText", Math.min(90, pct), `Items ${idx}/${totalHint || "?"}`);
+              });
+            } catch(eItems){
+              log(`Warnung: Item-Export fehlgeschlagen für '${list.Title}' (Id=${list.Id}): ${diagError(eItems)} | Items übersprungen`);
+              items = [];
+            }
+
+            const advanced = {
+              EnableFolderCreation: listInfo.EnableFolderCreation,
+              ForceCheckout: listInfo.ForceCheckout,
+              EnableAttachments: listInfo.EnableAttachments
+            };
+
+            let roleAssignments = [];
+            const raUrl = buildListUrl(list.Id, "/roleassignments?$expand=Member,RoleDefinitionBindings");
+            log(`Rufe RoleAssignments ab: ${siteUrl}${raUrl}`);
+            try {
+              const raResp = await spGet(raUrl, siteUrl);
+              if (raResp?.d?.results) {
+                roleAssignments = raResp.d.results.map(r => ({
+                  Member: { LoginName: r.Member?.LoginName || null, Title: r.Member?.Title || null, PrincipalType: r.Member?.PrincipalType || null },
+                  Roles: (r.RoleDefinitionBindings?.results || []).map(role => role.Name)
+                }));
+              } else {
+                log(`Warnung: Rolle-Zuordnungen für '${list.Title}' leere Antwort (${raUrl}).`);
+              }
+            } catch(e){
+              log(`Warnung: Rolle-Zuordnungen für '${list.Title}' konnten nicht geladen werden: ${diagError(e)}`);
+            }
+
+            exportObj.lists.push({
+              Id: listInfo.Id,
+              Title: listInfo.Title,
+              BaseTemplate: listInfo.BaseTemplate,
+              Description: listInfo.Description,
+              ItemCount: listInfo.ItemCount,
+              Hidden: !!listInfo.Hidden,
+              Versioning: {
+                EnableVersioning: listInfo.EnableVersioning,
+                EnableMinorVersions: listInfo.EnableMinorVersions,
+                MajorVersionLimit: listInfo.MajorVersionLimit,
+                MajorWithMinorVersionsLimit: listInfo.MajorWithMinorVersionsLimit,
+                EnableModeration: listInfo.EnableModeration
+              },
+              AdvancedSettings: advanced,
+              Fields: fields,
+              Views: views,
+              Items: items,
+              ListItemEntityTypeFullName: listInfo.ListItemEntityTypeFullName,
+              Permissions: roleAssignments,
+              InformationManagementPolicy: null,
+              RootFolderServerRelativeUrl: listInfo.RootFolderServerRelativeUrl || null
+            });
+            showSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText",100,`Liste ${list.Title} fertig`);
+          }
+
+          showProgress("#exportProgressWrap","#exportProgress","#exportProgressText",100,"Export abgeschlossen");
+          resetSubProgress("#exportSubProgressWrap","#exportSubProgress","#exportSubProgressText");
+          downloadJson(exportObj, `SP_Lists_Export_${(new Date()).toISOString().replace(/[:.]/g,"-")}.json`);
+          log("Export fertig. Datei heruntergeladen.");
+        } catch(err){ log("Export gescheitert: " + diagError(err)); } finally { $("#btnExport").prop("disabled", false); setTimeout(()=> resetProgress("#exportProgressWrap","#exportProgress","#exportProgressText"), 1200); }
+      }
+
+      function handleFileChosen(file){
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e){
+          try { loadedImportData = JSON.parse(e.target.result); $("#btnPreview").prop("disabled", false); log(`Import-Datei geladen: ${loadedImportData.lists ? loadedImportData.lists.length + " Listen" : "keine Listen gefunden"}`); }
+          catch(err){ log("Fehler beim Einlesen der Datei: " + diagError(err)); loadedImportData = null; $("#btnPreview").prop("disabled", true); }
+        };
+        reader.readAsText(file);
+      }
+
+      function renderPreview(){
+        if (!loadedImportData) return;
+        $("#previewList").empty();
+        const lists = loadedImportData.lists || [];
+        $("#previewCount").text(`Anzahl Listen: ${lists.length}`);
+        lists.forEach((list, idx) => {
+          const id = `preview_chk_${idx}`;
+          const hiddenTag = list.Hidden ? `<span class="tag-hidden">Ausgeblendet</span>` : '';
+          const item = $(`
+            <div class="preview-item" role="listitem">
+              <input type="checkbox" id="${id}" data-index="${idx}" checked />
+              <div class="meta">
+                <strong>${escapeHtml(list.Title)}</strong> (${escapeHtml(String(list.BaseTemplate))}) ${hiddenTag}<br/>
+                Felder: ${list.Fields ? list.Fields.length : 0}, Einträge: ${list.ItemCount || 0}<br/>
+                ${list.Versioning && list.Versioning.EnableVersioning ? "Versionierung aktiv" : "Keine Versionierung"}
+              </div>
+              <div class="preview-controls" aria-hidden="false">
+                <label><input type="checkbox" class="preview-part" data-index="${idx}" data-part="settings" checked /> Einstellungen</label>
+                <label><input type="checkbox" class="preview-part" data-index="${idx}" data-part="fields" checked /> Felder</label>
+                <label><input type="checkbox" class="preview-part" data-index="${idx}" data-part="permissions" checked /> Berechtigungen</label>
+              </div>
+            </div>`);
+          $("#previewList").append(item);
+        });
+        $("#previewPanel").show();
+        $("#btnImport").prop("disabled", false);
+      }
+
+      async function performImport(targetSiteUrl){
+        const lists = loadedImportData.lists || [];
+        const selections = [];
+        $("#previewList .preview-item").each(function(){
+          const idx = $(this).find("input[type=checkbox]").data("index");
+          const checked = $(`#preview_chk_${idx}`).is(":checked");
+          if (!checked) return;
+          const parts = {};
+          $(this).find(".preview-part").each(function(){ parts[$(this).data("part")] = $(this).is(":checked"); });
+          selections.push({ index: idx, parts });
+        });
+
+        if (selections.length === 0) { log("Keine Listen zum Import ausgewählt."); return; }
+
+        if (!warnedNoItems){
+          log("Hinweis: Listen-Elemente werden jetzt mit exportiert/importiert (max 2000 pro Liste).");
+          warnedNoItems = true;
+        }
+
+        try {
+          $("#btnImport").prop("disabled", true);
+          resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+          log(`Starte Import von ${selections.length} Listen...`);
+
+          const toImport = selections.map(s => loadedImportData.lists[s.index]);
+
+          const { order, hasCycle } = topologicallySortLists(toImport);
+          const orderedLists = hasCycle
+            ? toImport
+            : order.map(t => toImport.find(l => l.Title === t)).filter(Boolean);
+          if (hasCycle) log("Warnung: Lookup-Abhängigkeits-Zyklus erkannt, benutze Originalreihenfolge.");
+          else log(`Lookup-Reihenfolge angewendet: ${order.join(" -> ")}`);
+
+          const titleToIdMap = {};
+          const oldIdToNewIdMap = {};
+          for (let i=0;i<orderedLists.length;i++){
+            const listObj = orderedLists[i];
+            showProgress("#importProgressWrap","#importProgress","#importProgressText", Math.round((i/orderedLists.length)*33), `Erzeuge/prüfe Liste (${i+1}/${orderedLists.length})`);
+            resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+            try {
+              const res = await ensureListSkeleton(targetSiteUrl, listObj);
+              titleToIdMap[listObj.Title] = res.id;
+              if (listObj.Id) oldIdToNewIdMap[normalizeGuidMaybe(listObj.Id)] = res.id;
+              log(`Liste '${listObj.Title}' bereit (Id: ${res.id}, exists: ${res.exists})`);
+            } catch(e){
+              log(`Fehler beim Erstellen/Prüfen der Liste '${listObj.Title}': ${diagError(e)}`);
+            }
+          }
+
+          orderedLists.forEach(lo=>{
+            (lo.Fields||[]).forEach(f=>{
+              if ((f.TypeAsString||'').toLowerCase().startsWith('lookup')){
+                const byTitle = f.LookupListTitle && titleToIdMap[f.LookupListTitle] ? titleToIdMap[f.LookupListTitle] : null;
+                const byOldId = f.LookupListId && oldIdToNewIdMap[normalizeGuidMaybe(f.LookupListId)] ? oldIdToNewIdMap[normalizeGuidMaybe(f.LookupListId)] : null;
+                const targetId = byTitle || byOldId || null;
+                if (targetId){
+                  f._TargetLookupListId = normalizeListId(targetId);
+                  f.LookupListId = f._TargetLookupListId;
+                }
+              }
+            });
+          });
+
+          for (let i=0;i<orderedLists.length;i++){
+            const listObj = orderedLists[i];
+            const createdListId = titleToIdMap[listObj.Title];
+
+            const nonLookupFields = (listObj.Fields||[]).filter(f => {
+              const t = (f.TypeAsString||'').toLowerCase();
+              return t !== 'lookup' && t !== 'lookupmulti';
+            });
+            let fldCount = 0;
+            resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+            showProgress("#importProgressWrap","#importProgress","#importProgressText", Math.round((33 + (i/orderedLists.length)*17)), `Felder (ohne Lookup) ${i+1}/${orderedLists.length}`);
+            try { await createOrUpdateFieldsForList(targetSiteUrl, createdListId, listObj, titleToIdMap, loadedImportData.siteUrl, { pass: 'nonLookup', progressCb: (done,total)=>{ fldCount=done; showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((done/Math.max(1,total))*100), `Felder ${done}/${total}`); } }); }
+            catch(e){ log(`Fehler bei Feldern (non-lookup) für '${listObj.Title}': ${diagError(e)}`); }
+
+            const lookupFields = (listObj.Fields||[]).filter(f => {
+              const t = (f.TypeAsString||'').toLowerCase();
+              return t === 'lookup' || t === 'lookupmulti';
+            });
+            fldCount = 0;
+            resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+            showProgress("#importProgressWrap","#importProgress","#importProgressText", Math.round((50 + (i/orderedLists.length)*16)), `Felder (Lookup) ${i+1}/${orderedLists.length}`);
+            try { await createOrUpdateFieldsForList(targetSiteUrl, createdListId, listObj, titleToIdMap, loadedImportData.siteUrl, { pass: 'lookupOnly', progressCb: (done,total)=>{ fldCount=done; showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", Math.round((done/Math.max(1,total))*100), `Lookup-Felder ${done}/${total}`); } }); }
+            catch(e){ log(`Fehler bei Feldern (lookup) für '${listObj.Title}': ${diagError(e)}`); }
+
+            resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+            showProgress("#importProgressWrap","#importProgress","#importProgressText", Math.round((66 + (i/orderedLists.length)*34)), `Einstellungen/Berechtigungen/Views/Items (${i+1}/${orderedLists.length})`);
+
+            try {
+              await jsomUpdateListSettings(targetSiteUrl || normalizeSite(), createdListId, listObj);
+              log(`Einstellungen für '${listObj.Title}' (JSOM) gesetzt.`);
+            } catch(e){ log(`Warnung: Einstellungen für '${listObj.Title}' (JSOM) konnten nicht vollständig gesetzt werden: ${diagError(e)}`); }
+
+            try {
+              if (Array.isArray(listObj.Permissions) && listObj.Permissions.length > 0) {
+                if (!PermissionsApi.isConfigured()) { log("PermissionsApi nicht verfügbar; Berechtigungen übersprungen."); }
+                else { await PermissionsApi.setListPermissions(targetSiteUrl || loadedImportData.siteUrl, createdListId, listObj.Permissions); log(`Berechtigungen für '${listObj.Title}' gesetzt (via PermissionsApi).`); }
+              }
+            } catch(e){ log(`Fehler beim Setzen der Berechtigungen für '${listObj.Title}': ${diagError(e)}`); }
+
+            try {
+              if (typeof listObj.Hidden !== "undefined") {
+                const ctx = await loadJsomContext(targetSiteUrl || normalizeSite());
+                const list = ctx.get_web().get_lists().getById(createdListId);
+                list.set_hidden(!!listObj.Hidden);
+                list.update();
+                await execQuery(ctx);
+                log(`Hidden-Status für '${listObj.Title}' auf ${listObj.Hidden ? "ausgeblendet" : "sichtbar"} gesetzt (JSOM).`);
+              }
+            } catch(e){ log(`Warnung: Hidden-Status für '${listObj.Title}' konnte nicht gesetzt werden: ${diagError(e)}`); }
+
+            if (Array.isArray(listObj.Views) && listObj.Views.length > 0){
+              await jsomUpsertViews(targetSiteUrl || normalizeSite(), createdListId, listObj.Views);
+            } else {
+              log(`Keine Views in Importdaten für '${listObj.Title}'.`);
+            }
+
+            if (Array.isArray(listObj.Items) && listObj.Items.length > 0){
+              resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+              showSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText", 0, `Items 0/${listObj.Items.length}`);
+              await jsomImportItems(targetSiteUrl || normalizeSite(), createdListId, listObj, titleToIdMap);
+            }
+          }
+
+          showProgress("#importProgressWrap","#importProgress","#importProgressText",100,"Import abgeschlossen");
+          resetSubProgress("#importSubProgressWrap","#importSubProgress","#importSubProgressText");
+          log("Import abgeschlossen.");
+        } catch(err){
+          log("Import gescheitert: " + diagError(err));
+        } finally { $("#btnImport").prop("disabled", false); setTimeout(()=> resetProgress("#importProgressWrap","#importProgress","#importProgressText"), 1200); }
+      }
+
+      function mapTypeToKind(typeStr){
+        switch((typeStr||"").toLowerCase()){
+          case "text": return 2;
+          case "note": return 3;
+          case "number": return 9;
+          case "datetime": return 4;
+          case "boolean": return 8;
+          case "user": return 20;
+          case "lookup": return 7;
+          case "choice": return 6;
+          default: return 2;
+        }
+      }
+
+      async function ensureListSkeleton(targetSiteUrl, listObj) {
+        const baseTemplate = listObj.BaseTemplate || 100;
+        const escapedTitle = (listObj.Title || '').replace(/'/g, "''");
+        try {
+          const exists = await spGet(`/_api/web/lists/getByTitle('${escapedTitle}')?$select=Id`, targetSiteUrl);
+          return { id: exists.d.Id, exists: true };
+        } catch (getErr) {
+          log(`GetByTitle fehlgeschlagen für '${listObj.Title}': ${getErr}. Versuche Liste zu erstellen...`);
+          try {
+            const payload = { '__metadata': { 'type': 'SP.List' }, Title: listObj.Title, BaseTemplate: baseTemplate, Description: listObj.Description || '' };
+            const createResp = await spPost(`/_api/web/lists`, payload, targetSiteUrl);
+            return { id: createResp.d.Id, exists: false };
+          } catch (createErr) {
+            log(`Erstellen der Liste '${listObj.Title}' fehlgeschlagen: ${diagError(createErr)}`);
+            throw new Error(`Create list '${listObj.Title}' failed: ${createErr}`);
+          }
+        }
+      }
+
+      async function createChoiceField(targetSiteUrl, listId, f){
+        try {
+          const payload = { '__metadata': { 'type': 'SP.FieldChoice' }, Title: f.Title, InternalName: f.InternalName, Required: !!f.Required, Hidden: !!f.Hidden, Choices: { results: Array.isArray(f.Choices) ? f.Choices : [] } };
+          await spPost(buildListUrl(listId,"/fields"), payload, targetSiteUrl);
+          return true;
+        } catch(e){
+          if (f.SchemaXml) return await tryCreateFieldAsXml(targetSiteUrl, listId, f.SchemaXml, loadedImportData?.siteUrl);
+          return false;
+        }
+      }
+
+      function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+      async function tryCreateFieldAsXml(targetSiteUrl, listId, schemaXml, sourceSiteUrl){
+        try {
+          if (sourceSiteUrl) {
+            const re = new RegExp(escapeRegExp(sourceSiteUrl), 'g');
+            schemaXml = schemaXml.replace(re, targetSiteUrl || '');
+          }
+          const endpoint = buildListUrl(listId, "/fields/CreateFieldAsXml");
+          const variants = [
+            { parameters: schemaXml },
+            { parameters: { SchemaXml: schemaXml, Options: 0 } },
+            { SchemaXml: schemaXml, Options: 0 }
+          ];
+          for (const p of variants) {
+            try { await spPost(endpoint, p, targetSiteUrl); return true; } catch(e){ /* next */ }
+          }
+          throw new Error("CreateFieldAsXml via REST fehlgeschlagen (alle Varianten)");
+        } catch(e){ log(`CreateFieldAsXml Fehler: ${diagError(e)}`); return false; }
+      }
+
+      async function createTaxonomyFieldViaCSOM(targetSiteUrl, listId, f){
+        if (f.SchemaXml) {
+          const ok = await tryCreateFieldAsXml(targetSiteUrl, listId, f.SchemaXml, loadedImportData?.siteUrl);
+          if (ok) return true;
+        }
+        try {
+          const payload = { '__metadata': { 'type': 'SP.FieldText' }, Title: f.Title, InternalName: f.InternalName, Required: !!f.Required, Hidden: !!f.Hidden };
+          await spPost(buildListUrl(listId,"/fields"), payload, targetSiteUrl);
+          return true;
+        } catch(e){ return false; }
+      }
+
+      async function createOrUpdateFieldsForList(targetSiteUrl, createdListId, listObj, titleToIdMap, sourceSiteUrl, opts){
+        const pass = opts?.pass || 'all';
+        const allowLookup = pass !== 'nonLookup';
+        const allowNonLookup = pass !== 'lookupOnly';
+
+        const fields = listObj.Fields || [];
+        const filtered = fields.filter(f=>{
+          const isLookup = ((f.TypeAsString||'').toLowerCase()==='lookup' || (f.TypeAsString||'').toLowerCase()==='lookupmulti');
+          if (isLookup && !allowLookup) return false;
+          if (!isLookup && !allowNonLookup) return false;
+          if (!isUserCreatableField(f)) return false;
+          return true;
+        });
+        const total = filtered.length;
+        let done = 0;
+
+        for (const f of filtered){
+          try {
+            const type = (f.TypeAsString || '').toLowerCase();
+            const isLookup = type === 'lookup' || type === 'lookupmulti';
+
+            let existing = null;
+            try {
+              const ef = await spGet(buildListUrl(createdListId, `/fields?$filter=InternalName eq '${f.InternalName}'&$select=Id,InternalName,TypeAsString`), targetSiteUrl);
+              if (ef?.d?.results?.length) existing = ef.d.results[0];
+            } catch(e){ /* ignore */ }
+
+            const fieldPayloadCommon = { '__metadata': { 'type': 'SP.Field' }, Title: f.Title, Required: !!f.Required };
+            const targetLookupId = isLookup
+              ? (f._TargetLookupListId
+                  || (f.LookupListTitle && titleToIdMap[f.LookupListTitle] ? normalizeListId(titleToIdMap[f.LookupListTitle]) : null))
+              : null;
+
+            if (existing) {
+              try {
+                await spMerge(buildListUrl(createdListId, `/fields(guid'${existing.Id}')`), fieldPayloadCommon, targetSiteUrl);
+                log(`Feld '${f.InternalName}' aktualisiert (ohne Hidden/ReadOnly).`);
+              } catch(e){
+                log(`Warnung: Feld '${f.InternalName}' konnte nicht aktualisiert werden: ${diagError(e)}`);
+              }
+              done++; opts?.progressCb?.(done,total);
+              continue;
+            }
+
+            if (type === 'choice' || Array.isArray(f.Choices)) {
+              const ok = await createChoiceField(targetSiteUrl, createdListId, f);
+              if (!ok) log(`Warnung: Choice-Feld '${f.InternalName}' konnte nicht erstellt werden.`);
+              done++; opts?.progressCb?.(done,total);
+              continue;
+            }
+
+            if (type === 'lookup') {
+              if (targetLookupId) {
+                try {
+                  const lookupPayload = { '__metadata': { 'type': 'SP.FieldLookup' }, Title: f.Title, InternalName: f.InternalName, Required: !!f.Required, Hidden: !!f.Hidden, LookupList: targetLookupId, LookupField: f.LookupField || 'Title' };
+                  await spPost(buildListUrl(createdListId,"/fields"), lookupPayload, targetSiteUrl);
+                  log(`Lookup-Feld '${f.InternalName}' erstellt (mapped to '${f.LookupListTitle || targetLookupId}').`);
+                  done++; opts?.progressCb?.(done,total);
+                  continue;
+                } catch(e){ /* fallback below */ }
+              }
+              if (f.SchemaXml) {
+                const ok = await tryCreateFieldAsXml(targetSiteUrl, createdListId, f.SchemaXml, sourceSiteUrl);
+                if (ok) { log(`Lookup-Feld '${f.InternalName}' erstellt via SchemaXml.`); done++; opts?.progressCb?.(done,total); continue; }
+              }
+              try {
+                const fallbackPayload = Object.assign({}, fieldPayloadCommon, { InternalName: f.InternalName, FieldTypeKind: 2 });
+                await spPost(buildListUrl(createdListId,"/fields"), fallbackPayload, targetSiteUrl);
+                log(`Fallback: Lookup-Feld '${f.InternalName}' als Text erstellt.`);
+              } catch(e){ log(`Warnung: Lookup-Feld '${f.InternalName}' konnte nicht erstellt werden: ${diagError(e)}`); }
+              done++; opts?.progressCb?.(done,total);
+              continue;
+            }
+
+            if (type === 'taxonomy' || (f.SchemaXml && f.SchemaXml.toLowerCase().includes('termsetid'))) {
+              const ok = await createTaxonomyFieldViaCSOM(targetSiteUrl, createdListId, f);
+              if (!ok) log(`Warnung: Taxonomy-Feld '${f.InternalName}' möglicherweise nicht korrekt erstellt.`);
+              done++; opts?.progressCb?.(done,total);
+              continue;
+            }
+
+            let created = false;
+            if (f.SchemaXml) {
+              created = await tryCreateFieldAsXml(targetSiteUrl, createdListId, f.SchemaXml, sourceSiteUrl);
+              if (created) { log(`Feld '${f.InternalName}' erstellt via SchemaXml.`); done++; opts?.progressCb?.(done,total); continue; }
+            }
+
+            try {
+              const payload = Object.assign({}, fieldPayloadCommon, { InternalName: f.InternalName, FieldTypeKind: mapTypeToKind(f.TypeAsString), Hidden: !!f.Hidden });
+              await spPost(buildListUrl(createdListId,"/fields"), payload, targetSiteUrl);
+              log(`Feld '${f.InternalName}' erstellt (einfach).`);
+            } catch(e){
+              log(`Warnung: Feld '${f.InternalName}' konnte nicht erstellt werden: ${diagError(e)}`);
+            }
+            done++; opts?.progressCb?.(done,total);
+
+          } catch(err){
+            log(`Fehler bei Feld '${f && f.InternalName ? f.InternalName : '(unknown)'}' in Liste '${listObj.Title}': ${diagError(err)}`);
+            done++; opts?.progressCb?.(done,total);
+          }
+        }
+      }
+
+      $(function(){
+        $("#btnExport").on("click", function(){ const siteUrl = $("#siteUrl").val().trim() || null; exportAllLists(siteUrl); });
+        $("#importFile").on("change", function(e){ handleFileChosen((e.target.files && e.target.files[0]) || null); });
+        $("#btnPreview").on("click", function(){ renderPreview(); });
+        $("#btnSelectAll").on("click", function(){ $("#previewList input[type=checkbox]").prop("checked", true); });
+        $("#btnDeselectAll").on("click", function(){ $("#previewList input[type=checkbox]").prop("checked", false); });
+        $("#btnImport").on("click", function(){ const targetSiteUrl = $("#siteUrl").val().trim() || null; performImport(targetSiteUrl); });
+
+        $("#logPanel").hide(); $("#previewPanel").hide();
+      });
+
+    }); // ready
+  })();
+  </script>
+</body>
+</html>
